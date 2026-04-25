@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from "react";
 import api from "../../lib/api";
 import type { SubmissionStatus, Language } from "../../types";
 
@@ -60,11 +61,7 @@ export default function SubmissionHistory({
   const [code, setCode] = useState<string>("");
   const [loadingCode, setLoadingCode] = useState(false);
 
-  useEffect(() => {
-    fetchSubmissions();
-  }, [roomCode, participantName, problemId]);
-
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = useCallback(async () => {
     setLoading(true);
     try {
       let res;
@@ -85,7 +82,11 @@ export default function SubmissionHistory({
     } finally {
       setLoading(false);
     }
-  };
+  }, [roomCode, participantName, role, problemId]);
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [fetchSubmissions]);
 
   const handleViewCode = async (submission: SubmissionRecord) => {
     setSelected(submission);
@@ -93,7 +94,7 @@ export default function SubmissionHistory({
     try {
       const res = await api.get(`/submissions/${submission.id}`);
       setCode(res.data.submission.code);
-    } catch (err) {
+    } catch {
       setCode("Failed to load code");
     } finally {
       setLoadingCode(false);
@@ -159,7 +160,6 @@ export default function SubmissionHistory({
         ))}
       </div>
 
-      {/* Code viewer modal */}
       {selected && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
@@ -186,7 +186,7 @@ export default function SubmissionHistory({
                 onClick={() => setSelected(null)}
                 className="text-zinc-500 hover:text-white transition text-xl leading-none"
               >
-                ×
+                x
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4">

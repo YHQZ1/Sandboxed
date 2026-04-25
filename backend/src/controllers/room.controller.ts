@@ -62,7 +62,6 @@ export const join = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  // extract userId from JWT if present (for hosts)
   let userId: string | undefined;
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
@@ -74,7 +73,7 @@ export const join = async (req: Request, res: Response): Promise<void> => {
       ) as any;
       userId = payload.userId;
     } catch {
-      // token invalid — fine for participants/viewers, blocked below for hosts
+      // Token invalid, continue without userId
     }
   }
 
@@ -135,7 +134,6 @@ export const timerStart = async (
       res.status(403).json({ error: "Hosts only" });
       return;
     }
-    // actual timer logic is driven by WebSocket — this just validates + triggers the socket event
     res.json({ message: "Send timer_start via WebSocket" });
   } catch (err) {
     res.status(500).json({ error: "Internal server error" });

@@ -1,12 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+
+type Role = "host" | "participant" | "viewer";
 
 export default function JoinRoom() {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"participant" | "viewer">("participant");
+  const [role, setRole] = useState<Role>("participant");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -15,9 +20,23 @@ export default function JoinRoom() {
       setError("Room code and name are required");
       return;
     }
+
+    if (role === "host" && (!email || !password)) {
+      setError("Hosts must provide email and password");
+      return;
+    }
+
     setLoading(true);
     setError("");
+
     try {
+      if (role === "host") {
+        const loginRes = await api.post("/auth/login", { email, password });
+        localStorage.setItem("token", loginRes.data.token);
+        localStorage.setItem("userId", loginRes.data.user.id);
+        localStorage.setItem("hostName", loginRes.data.user.name);
+      }
+
       await api.post(`/rooms/${code.toUpperCase()}/join`, { name, role });
       navigate(`/room/${code.toUpperCase()}`, { state: { name, role } });
     } catch (err: any) {
@@ -30,12 +49,12 @@ export default function JoinRoom() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
       <div className="w-full max-w-md bg-zinc-900 rounded-xl p-8 border border-zinc-800">
-        <div className="flex items-center gap-2 mb-6">
+        <div className="mb-6">
           <button
             onClick={() => navigate("/")}
             className="text-zinc-500 hover:text-white transition text-sm"
           >
-            ← Back
+            Back
           </button>
         </div>
         <h1 className="text-2xl font-bold mb-6">Join a Room</h1>
@@ -52,16 +71,16 @@ export default function JoinRoom() {
             placeholder="Your name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleJoin()}
           />
+
           <div>
             <label className="text-zinc-400 text-sm mb-2 block">Join as</label>
             <div className="flex gap-3">
-              {(["participant", "viewer"] as const).map((r) => (
+              {(["participant", "viewer", "host"] as Role[]).map((r) => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
-                  className={`flex-1 py-2 rounded-lg border font-medium capitalize transition ${
+                  className={`flex-1 py-2 rounded-lg border font-medium capitalize transition text-sm ${
                     role === r
                       ? "bg-white text-black border-white"
                       : "border-zinc-600 text-zinc-400 hover:border-zinc-400"
@@ -72,6 +91,28 @@ export default function JoinRoom() {
               ))}
             </div>
           </div>
+
+          {role === "host" && (
+            <div className="flex flex-col gap-3 border border-zinc-700 rounded-xl p-4">
+              <p className="text-zinc-400 text-xs">Hosts must authenticate</p>
+              <input
+                className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20 text-sm"
+                placeholder="Email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <input
+                className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20 text-sm"
+                placeholder="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+              />
+            </div>
+          )}
+
           <button
             onClick={handleJoin}
             disabled={loading}

@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useSocket } from "../hooks/useSocket";
@@ -18,9 +22,9 @@ import api from "../lib/api";
 const DEFAULT_CODE: Record<Language, string> = {
   python: "# Write your solution here\n",
   javascript: "// Write your solution here\n",
-  cpp: "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    // your code\n    return 0;\n}\n",
-  c: "#include <stdio.h>\nint main() {\n    // your code\n    return 0;\n}\n",
-  java: "import java.util.*;\npublic class Solution {\n    public static void main(String[] args) {\n        // your code\n    }\n}\n",
+  cpp: "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    return 0;\n}\n",
+  c: "#include <stdio.h>\nint main() {\n    return 0;\n}\n",
+  java: "import java.util.*;\npublic class Solution {\n    public static void main(String[] args) {\n    }\n}\n",
 };
 
 const VERDICT_COLOR: Record<SubmissionStatus, string> = {
@@ -52,7 +56,7 @@ export default function Room() {
     role: "host" | "participant" | "viewer";
   } | null;
 
-  const { room, problems, myRole, setMyIdentity } = useRoomStore();
+  const { problems, myRole, setMyIdentity } = useRoomStore();
   const { status: timerStatus } = useTimerStore();
 
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(
@@ -144,9 +148,7 @@ export default function Room() {
       <RoomHeader />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar */}
         <div className="w-64 border-r border-zinc-800 flex flex-col flex-shrink-0">
-          {/* Tabs */}
           <div className="flex border-b border-zinc-800">
             {(
               [
@@ -174,7 +176,6 @@ export default function Room() {
             ))}
           </div>
 
-          {/* Tab content */}
           <div className="flex-1 overflow-y-auto p-3">
             {activeTab === "problems" && (
               <div className="flex flex-col gap-2">
@@ -213,7 +214,6 @@ export default function Room() {
             )}
           </div>
 
-          {/* Host timer controls */}
           {myRole === "host" && (
             <div className="p-3 border-t border-zinc-800 flex flex-col gap-2">
               <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">
@@ -253,7 +253,7 @@ export default function Room() {
                       onClick={() => navigate(`/results/${code}`)}
                       className="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition"
                     >
-                      View Results →
+                      View Results
                     </button>
                   )}
                 </div>
@@ -262,9 +262,7 @@ export default function Room() {
           )}
         </div>
 
-        {/* Main content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Problem statement */}
           <div className="w-2/5 border-r border-zinc-800 overflow-y-auto p-6 flex-shrink-0">
             {selectedProblem ? (
               <ProblemView problem={selectedProblem} />
@@ -279,9 +277,7 @@ export default function Room() {
             )}
           </div>
 
-          {/* Code editor */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Editor toolbar */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
               <LanguageSelect
                 value={language}
@@ -328,7 +324,6 @@ export default function Room() {
               </div>
             </div>
 
-            {/* Monaco editor */}
             <div className="flex-1 overflow-hidden">
               <CodeEditor
                 language={language}
@@ -341,7 +336,6 @@ export default function Room() {
         </div>
       </div>
 
-      {/* Add problem modal */}
       {showAddProblem && (
         <AddProblemModal
           roomCode={code!}

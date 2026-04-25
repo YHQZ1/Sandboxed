@@ -4,12 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
+	"github.com/YHQZ1/dojo/judge/runner"
 	"github.com/redis/go-redis/v9"
-	"github.com/yourusername/dojo/judge/runner"
 )
 
 type TestCase struct {
@@ -59,7 +58,7 @@ func New(redisClient *redis.Client, db *sql.DB) *Worker {
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	log.Println("⚙️  Judge worker started, waiting for jobs...")
+	log.Println("Judge worker started, waiting for jobs...")
 
 	for {
 		select {
@@ -67,11 +66,10 @@ func (w *Worker) Start(ctx context.Context) {
 			log.Println("Worker shutting down")
 			return
 		default:
-			// blocking pop with 5s timeout
 			result, err := w.redis.BRPop(ctx, 5*time.Second, "queue:submissions").Result()
 			if err != nil {
 				if err == redis.Nil {
-					continue // timeout, no jobs — loop again
+					continue
 				}
 				if ctx.Err() != nil {
 					return
@@ -80,7 +78,6 @@ func (w *Worker) Start(ctx context.Context) {
 				continue
 			}
 
-			// result[0] = key, result[1] = value
 			if len(result) < 2 {
 				continue
 			}
@@ -91,20 +88,18 @@ func (w *Worker) Start(ctx context.Context) {
 				continue
 			}
 
-			log.Printf("🔨 Judging submission %s (%s, %s)", job.SubmissionID, job.Language, job.ParticipantName)
+			log.Printf("Judging submission %s (%s, %s)", job.SubmissionID, job.Language, job.ParticipantName)
 			w.processJob(ctx, job)
 		}
 	}
 }
 
 func (w *Worker) processJob(ctx context.Context, job SubmissionJob) {
-	// update status to judging
 	w.db.ExecContext(ctx,
 		`UPDATE submissions SET status = 'judging' WHERE id = $1`,
 		job.SubmissionID,
 	)
 
-	// build test cases for runner
 	tcs := make([]struct {
 		ID             string
 		Input          string
@@ -116,7 +111,6 @@ func (w *Worker) processJob(ctx context.Context, job SubmissionJob) {
 		tcs[i].ExpectedOutput = tc.ExpectedOutput
 	}
 
-	// run the code
 	results, err := runner.RunSubmission(job.Language, job.Code, job.TimeLimit, job.MemoryLimit, tcs)
 	if err != nil {
 		log.Printf("Runner error for %s: %v", job.SubmissionID, err)
@@ -130,7 +124,6 @@ func (w *Worker) processJob(ctx context.Context, job SubmissionJob) {
 		return
 	}
 
-	// determine overall verdict
 	verdict := determineVerdict(results)
 	score := 0
 	if verdict == "accepted" {
@@ -178,7 +171,7 @@ func (w *Worker) publishVerdict(ctx context.Context, verdict VerdictResult) {
 		log.Printf("Failed to publish verdict: %v", err)
 		return
 	}
-	log.Printf("✅ Published verdict for %s: %s", verdict.SubmissionID, verdict.Status)
+	log.Printf("Published verdict for %s: %s", verdict.SubmissionID, verdict.Status)
 }
 
 func (w *Worker) getProblemScore(ctx context.Context, problemID string) int {
@@ -187,7 +180,7 @@ func (w *Worker) getProblemScore(ctx context.Context, problemID string) int {
 		`SELECT points FROM problems WHERE id = $1`, problemID,
 	).Scan(&score)
 	if err != nil {
-		return 100 // default
+		return 100
 	}
 	return score
 }
@@ -212,6 +205,3 @@ func determineVerdict(results []runner.TestCaseResult) string {
 	}
 	return "accepted"
 }
-
-// keep compiler happy
-var _ = fmt.Sprintf

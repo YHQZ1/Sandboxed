@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -57,7 +58,7 @@ export default function CreateRoom() {
             onClick={() => navigate("/")}
             className="text-zinc-500 hover:text-white transition text-sm"
           >
-            ← Back
+            Back
           </button>
         </div>
         <h1 className="text-2xl font-bold mb-6">

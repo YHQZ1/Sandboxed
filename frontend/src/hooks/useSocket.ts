@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect } from "react";
 import { connectSocket, disconnectSocket, getSocket } from "../socket/socket";
 import { useRoomStore } from "../store/roomStore";
@@ -89,7 +90,21 @@ export const useSocket = (
       socket.off("problem_updated");
       disconnectSocket();
     };
-  }, [roomCode, name, role]);
+  }, [
+    roomCode,
+    name,
+    role,
+    setRoom,
+    setProblems,
+    setParticipants,
+    setLeaderboard,
+    setDuration,
+    setTimer,
+    addParticipant,
+    removeParticipant,
+    addProblem,
+    updateProblem,
+  ]);
 
   return getSocket();
 };

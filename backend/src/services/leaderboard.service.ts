@@ -1,5 +1,4 @@
 import redis from "../config/redis";
-import pool from "../config/db";
 
 export const updateLeaderboard = async (
   roomCode: string,
@@ -7,7 +6,6 @@ export const updateLeaderboard = async (
   newScore: number,
   submissionId: string,
 ) => {
-  // get current total score for participant
   const existing = await redis.hget(
     `room:${roomCode}:leaderboard:meta`,
     participantName,
@@ -21,15 +19,12 @@ export const updateLeaderboard = async (
   meta.lastAcceptedAt = new Date().toISOString();
   meta.name = participantName;
 
-  // store metadata
   await redis.hset(
     `room:${roomCode}:leaderboard:meta`,
     participantName,
     JSON.stringify(meta),
   );
 
-  // Redis sorted set score = total points (we store the full entry as the member)
-  // use negative time as tiebreaker encoded in score: score * 1e10 - timestamp_seconds
   const sortScore = meta.score * 1e10 - Math.floor(Date.now() / 1000);
 
   await redis.zadd(

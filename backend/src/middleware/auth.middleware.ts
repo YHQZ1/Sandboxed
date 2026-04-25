@@ -39,7 +39,7 @@ export const optionalAuth = (
 ): void => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    return next(); // no token, continue as unauthenticated
+    return next();
   }
   authenticate(req, res, next);
 };

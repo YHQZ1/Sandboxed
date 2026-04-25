@@ -3,7 +3,6 @@ import redis from "../../config/redis";
 import pool from "../../config/db";
 import { verifyRoomHost } from "../../services/room.service";
 
-// store active timer intervals in memory
 const timerIntervals = new Map<string, NodeJS.Timeout>();
 
 export const registerTimerHandlers = (io: SocketServer, socket: Socket) => {
@@ -39,7 +38,6 @@ export const registerTimerHandlers = (io: SocketServer, socket: Socket) => {
           [code],
         );
 
-        // clear any existing interval
         if (timerIntervals.has(code)) clearInterval(timerIntervals.get(code)!);
 
         let timeRemaining = duration;
@@ -62,7 +60,6 @@ export const registerTimerHandlers = (io: SocketServer, socket: Socket) => {
               [code],
             );
 
-            // get final leaderboard
             const leaderboardRaw = await redis.zrange(
               `room:${code}:leaderboard`,
               0,

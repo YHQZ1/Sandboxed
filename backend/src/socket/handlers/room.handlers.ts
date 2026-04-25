@@ -19,20 +19,16 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
         const code = roomCode.toUpperCase();
         const room = await getRoomByCode(code);
 
-        // join socket rooms
         socket.join(`room:${code}`);
 
-        // participants get their own private room for verdict delivery
         if (role === "participant") {
           socket.join(`user:${name}:${code}`);
         }
 
-        // store socket → name/role/room mapping for disconnect cleanup
         socket.data.roomCode = code;
         socket.data.name = name;
         socket.data.role = role;
 
-        // get current room state from Redis
         const timerRaw = await redis.hgetall(`room:${code}:timer`);
         const participantsRaw = await redis.hgetall(
           `room:${code}:participants`,
@@ -51,20 +47,17 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
           }),
         );
 
-        // parse leaderboard from Redis sorted set
         const leaderboard: any[] = [];
         for (let i = 0; i < leaderboardRaw.length; i += 2) {
           const entry = JSON.parse(leaderboardRaw[i]);
           leaderboard.push(entry);
         }
 
-        // hosts see all test cases, others see sample only
         const problems =
           role === "host"
             ? await getProblems(room.id)
             : await getPublicProblems(room.id);
 
-        // send full room state to the joining socket
         socket.emit("room_joined", {
           room,
           participants,
@@ -73,10 +66,7 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
           timer: timerRaw,
         });
 
-        // notify everyone else
         socket.to(`room:${code}`).emit("participant_joined", { name, role });
-
-        console.log(`👤 ${name} (${role}) joined room ${code}`);
       } catch (err) {
         console.error("join_room error:", err);
         socket.emit("error", { message: "Failed to join room" });
@@ -100,4 +90,22 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
       socket.to(`room:${roomCode}`).emit("participant_left", { name });
     }
   });
+
+  socket.on(
+    "problem_added",
+    ({ roomCode, problem }: { roomCode: string; problem: any }) => {
+      socket
+        .to(`room:${roomCode.toUpperCase()}`)
+        .emit("problem_added", { problem });
+    },
+  );
+
+  socket.on(
+    "problem_updated",
+    ({ roomCode, problem }: { roomCode: string; problem: any }) => {
+      socket
+        .to(`room:${roomCode.toUpperCase()}`)
+        .emit("problem_updated", { problem });
+    },
+  );
 };

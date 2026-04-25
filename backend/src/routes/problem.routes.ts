@@ -9,7 +9,7 @@ import {
 } from "../controllers/problem.controller";
 import { authenticate, optionalAuth } from "../middleware/auth.middleware";
 
-const router = Router({ mergeParams: true }); // gets :code from parent
+const router = Router({ mergeParams: true });
 
 router.get("/", optionalAuth, list);
 router.post("/", authenticate, create);

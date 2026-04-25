@@ -1,7 +1,6 @@
 import pool from "../config/db";
 import redis from "../config/redis";
 
-// generates codes like STORM-4821
 const generateRoomCode = (): string => {
   const words = [
     "STORM",
@@ -25,7 +24,6 @@ export const createRoom = async (
   name: string,
   timerDuration?: number,
 ) => {
-  // keep generating until we get a unique code (practically always first try)
   let code = generateRoomCode();
   let attempts = 0;
   while (attempts < 10) {
@@ -49,7 +47,6 @@ export const createRoom = async (
     );
     const room = roomResult.rows[0];
 
-    // creator is always a host of the room
     await client.query(
       `INSERT INTO room_hosts (room_id, user_id) VALUES ($1, $2)`,
       [room.id, hostUserId],
@@ -57,7 +54,6 @@ export const createRoom = async (
 
     await client.query("COMMIT");
 
-    // seed Redis room state
     await redis.hset(`room:${code}:timer`, {
       duration: timerDuration || 0,
       startedAt: "",
@@ -90,7 +86,7 @@ export const joinRoom = async (
   code: string,
   name: string,
   role: "host" | "participant" | "viewer",
-  userId?: string, // only present for hosts (JWT)
+  userId?: string,
 ) => {
   const room = await getRoomByCode(code);
 
@@ -99,7 +95,6 @@ export const joinRoom = async (
   if (role === "host") {
     if (!userId) throw new Error("Hosts must be authenticated");
 
-    // add to room_hosts if not already there
     await pool.query(
       `INSERT INTO room_hosts (room_id, user_id)
        VALUES ($1, $2)
@@ -107,7 +102,6 @@ export const joinRoom = async (
       [room.id, userId],
     );
 
-    // track in Redis
     await redis.hset(
       `room:${code}:participants`,
       name,
@@ -118,11 +112,9 @@ export const joinRoom = async (
       }),
     );
   } else {
-    // participants and viewers — sessionless, just Redis
     const existing = await redis.hget(`room:${code}:participants`, name);
     if (existing) {
       const parsed = JSON.parse(existing);
-      // allow rejoin with same name+role
       if (parsed.role !== role)
         throw new Error("Name already taken in this room");
     }
@@ -137,7 +129,6 @@ export const joinRoom = async (
     );
   }
 
-  // return the room + current participants
   const participantsRaw = await redis.hgetall(`room:${code}:participants`);
   const participants = Object.entries(participantsRaw || {}).map(([n, v]) => ({
     name: n,
@@ -185,9 +176,9 @@ export const verifyRoomHost = async (
 
 export const getRoomWithProblems = async (code: string) => {
   const room = await getRoomByCode(code);
-  const problemsResult = await pool.query(
+  const result = await pool.query(
     `SELECT * FROM problems WHERE room_id = $1 ORDER BY order_index`,
     [room.id],
   );
-  return { ...room, problems: problemsResult.rows };
+  return { ...room, problems: result.rows };
 };

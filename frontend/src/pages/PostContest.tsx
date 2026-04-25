@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import type { SubmissionStatus, Language } from "../types";
@@ -75,11 +77,7 @@ export default function PostContest() {
   } | null>(null);
   const [loadingCode, setLoadingCode] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [code]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -94,7 +92,6 @@ export default function PostContest() {
       const allSubmissions: SubmissionRecord[] =
         submissionsRes.data.submissions || [];
 
-      // group by participant
       const map = new Map<string, ParticipantSummary>();
       for (const s of allSubmissions) {
         if (!map.has(s.participant_name)) {
@@ -112,7 +109,6 @@ export default function PostContest() {
         }
       }
 
-      // sort by score desc
       const sorted = Array.from(map.values()).sort((a, b) => b.score - a.score);
       setParticipants(sorted);
 
@@ -122,7 +118,11 @@ export default function PostContest() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [code]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleViewCode = async (submissionId: string) => {
     setLoadingCode(true);
@@ -161,7 +161,7 @@ export default function PostContest() {
       second: "2-digit",
     });
 
-  const medals = ["🥇", "🥈", "🥉"];
+  const medals = ["#1", "#2", "#3"];
 
   if (loading) {
     return (
@@ -180,7 +180,7 @@ export default function PostContest() {
             onClick={() => navigate("/")}
             className="text-zinc-400 hover:text-white text-sm"
           >
-            ← Home
+            Home
           </button>
         </div>
       </div>
@@ -189,10 +189,9 @@ export default function PostContest() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Header */}
       <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-xl font-black">🥋</span>
+          <span className="text-xl font-black">Dojo</span>
           <div>
             <h1 className="font-bold text-lg">Contest Results</h1>
             <span className="font-mono text-xs text-zinc-500">{code}</span>
@@ -202,12 +201,11 @@ export default function PostContest() {
           onClick={() => navigate("/")}
           className="text-zinc-500 hover:text-white transition text-sm"
         >
-          ← Home
+          Home
         </button>
       </div>
 
       <div className="max-w-6xl mx-auto p-6 flex flex-col gap-6">
-        {/* Top 3 podium */}
         {participants.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
@@ -252,7 +250,6 @@ export default function PostContest() {
           </div>
         )}
 
-        {/* Problem grid */}
         {participants.length > 0 && problems.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-zinc-800">
@@ -324,7 +321,7 @@ export default function PostContest() {
                                 {VERDICT_SHORT[best.status]}
                               </span>
                             ) : (
-                              <span className="text-zinc-700 text-xs">—</span>
+                              <span className="text-zinc-700 text-xs">-</span>
                             )}
                           </td>
                         );
@@ -337,7 +334,6 @@ export default function PostContest() {
           </div>
         )}
 
-        {/* Selected participant detail */}
         {selectedSummary && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
@@ -389,7 +385,7 @@ export default function PostContest() {
                       {fmt(s.submitted_at)}
                     </span>
                     <span className="text-xs text-zinc-600 hover:text-white transition">
-                      View code →
+                      View code
                     </span>
                   </div>
                 ))
@@ -399,7 +395,6 @@ export default function PostContest() {
         )}
       </div>
 
-      {/* Code viewer modal */}
       {selectedCode && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
@@ -418,7 +413,7 @@ export default function PostContest() {
                 onClick={() => setSelectedCode(null)}
                 className="text-zinc-500 hover:text-white transition text-xl"
               >
-                ×
+                x
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4">

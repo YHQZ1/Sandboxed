@@ -3,6 +3,20 @@ import pool from "../config/db";
 import { getIO } from "../socket";
 import { updateLeaderboard } from "../services/leaderboard.service";
 
+const getLeaderboard = async (roomCode: string) => {
+  const raw = await redis.zrange(
+    `room:${roomCode}:leaderboard`,
+    0,
+    -1,
+    "WITHSCORES",
+  );
+  const leaderboard: any[] = [];
+  for (let i = 0; i < raw.length; i += 2) {
+    leaderboard.push(JSON.parse(raw[i]));
+  }
+  return leaderboard;
+};
+
 export const startVerdictListener = () => {
   const sub = redis.duplicate();
 
@@ -11,7 +25,6 @@ export const startVerdictListener = () => {
       console.error("Failed to subscribe to pubsub:verdict", err);
       return;
     }
-    console.log("👂 Listening for verdicts on pubsub:verdict");
   });
 
   sub.on("message", async (_channel, message) => {
@@ -25,10 +38,9 @@ export const startVerdictListener = () => {
         score,
         timeTaken,
         memoryUsed,
-        results, // per test case results
+        results,
       } = verdict;
 
-      // update submission in postgres
       await pool.query(
         `UPDATE submissions 
          SET status = $1, score = $2, time_taken = $3, memory_used = $4
@@ -36,7 +48,6 @@ export const startVerdictListener = () => {
         [status, score, timeTaken, memoryUsed, submissionId],
       );
 
-      // insert per test case results
       if (results && results.length > 0) {
         for (const r of results) {
           await pool.query(
@@ -55,14 +66,12 @@ export const startVerdictListener = () => {
         }
       }
 
-      // update leaderboard in redis if accepted
       if (status === "accepted") {
         await updateLeaderboard(roomCode, participantName, score, submissionId);
       }
 
       const io = getIO();
 
-      // send verdict to the specific participant
       io.to(`user:${participantName}:${roomCode}`).emit("verdict", {
         submissionId,
         status,
@@ -70,25 +79,10 @@ export const startVerdictListener = () => {
         timeTaken,
       });
 
-      // broadcast leaderboard to whole room
       const leaderboard = await getLeaderboard(roomCode);
       io.to(`room:${roomCode}`).emit("leaderboard_update", { leaderboard });
     } catch (err) {
       console.error("Verdict processing error:", err);
     }
   });
-};
-
-const getLeaderboard = async (roomCode: string) => {
-  const raw = await redis.zrange(
-    `room:${roomCode}:leaderboard`,
-    0,
-    -1,
-    "WITHSCORES",
-  );
-  const leaderboard: any[] = [];
-  for (let i = 0; i < raw.length; i += 2) {
-    leaderboard.push(JSON.parse(raw[i]));
-  }
-  return leaderboard;
 };

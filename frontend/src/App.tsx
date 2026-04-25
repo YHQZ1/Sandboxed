@@ -1,11 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import Home from './pages/Home';
-import CreateRoom from './pages/CreateRoom';
-import JoinRoom from './pages/JoinRoom';
-import Room from './pages/Room';
-import Register from './pages/Register';
-import PostContest from './pages/PostContest'
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Home from "./pages/Home";
+import CreateRoom from "./pages/CreateRoom";
+import JoinRoom from "./pages/JoinRoom";
+import Room from "./pages/Room";
+import Register from "./pages/Register";
+import PostContest from "./pages/PostContest";
 
 const queryClient = new QueryClient();
 

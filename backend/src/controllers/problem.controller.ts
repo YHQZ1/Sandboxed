@@ -5,22 +5,18 @@ import {
   createProblem,
   getProblems,
   getPublicProblems,
-  getProblemById,
   updateProblem,
   deleteProblem,
   addTestCase,
   deleteTestCase,
 } from "../services/problem.service";
 
-// GET /api/rooms/:code/problems
 export const list = async (req: AuthRequest, res: Response): Promise<void> => {
   const { code } = req.params;
 
   try {
     const room = await getRoomByCode(code.toUpperCase());
 
-    // if authenticated and a host → return all test cases
-    // otherwise → sample only
     let problems;
     if (req.user) {
       const isHost = await verifyRoomHost(code.toUpperCase(), req.user.userId);
@@ -42,7 +38,6 @@ export const list = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-// POST /api/rooms/:code/problems
 export const create = async (
   req: AuthRequest,
   res: Response,
@@ -93,7 +88,6 @@ export const create = async (
   }
 };
 
-// PUT /api/rooms/:code/problems/:id
 export const update = async (
   req: AuthRequest,
   res: Response,
@@ -126,7 +120,6 @@ export const update = async (
   }
 };
 
-// DELETE /api/rooms/:code/problems/:id
 export const remove = async (
   req: AuthRequest,
   res: Response,
@@ -152,7 +145,6 @@ export const remove = async (
   }
 };
 
-// POST /api/rooms/:code/problems/:id/testcases
 export const addTC = async (req: AuthRequest, res: Response): Promise<void> => {
   const { code, id } = req.params;
   const { input, expected_output, is_sample } = req.body;
@@ -186,7 +178,6 @@ export const addTC = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-// DELETE /api/rooms/:code/problems/:id/testcases/:tcId
 export const removeTC = async (
   req: AuthRequest,
   res: Response,

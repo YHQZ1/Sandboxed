@@ -1,4 +1,4 @@
-module github.com/yourusername/dojo/judge
+module github.com/YHQZ1/dojo/judge
 
 go 1.25.5
 

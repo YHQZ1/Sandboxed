@@ -41,7 +41,6 @@ func RunSubmission(
 		return nil, fmt.Errorf("failed to write source: %w", err)
 	}
 
-	// compile locally for compiled languages (faster than in-container compile)
 	if err := compile(dir, language, srcFile); err != nil {
 		results := make([]TestCaseResult, len(testCases))
 		for i, tc := range testCases {
@@ -103,17 +102,8 @@ func compile(dir, language, srcFile string) error {
 func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLimit, memoryLimit int) TestCaseResult {
 	image := dockerImage(language)
 
-	// build the run command to execute inside the container
 	runCmd := buildContainerRunCmd(language)
 
-	// docker run flags:
-	// --rm          auto-remove container after exit
-	// --network none no internet access
-	// --memory      hard memory limit
-	// --cpus         cpu limit
-	// -v            mount the temp dir read-only
-	// --workdir     set working dir inside container
-	// -i            accept stdin
 	args := []string{
 		"run", "--rm",
 		"--network", "none",
@@ -155,7 +145,6 @@ func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLi
 	}
 
 	if err != nil {
-		// check if it was TLE based on elapsed time vs limit
 		if elapsed >= timeLimit*1000 {
 			return TestCaseResult{
 				TestCaseID: testCaseID,

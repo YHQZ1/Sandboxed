@@ -2,6 +2,13 @@ import pool from "../config/db";
 import bcrypt from "bcrypt";
 import jwt, { SignOptions } from "jsonwebtoken";
 
+const generateToken = (userId: string, email: string): string => {
+  const payload = { userId, email };
+  const secret = process.env.JWT_SECRET as string;
+  const options: SignOptions = { expiresIn: "7d" };
+  return jwt.sign(payload, secret, options);
+};
+
 export const registerUser = async (
   name: string,
   email: string,
@@ -56,11 +63,4 @@ export const getUserById = async (userId: string) => {
   );
   if (!result.rows[0]) throw new Error("User not found");
   return result.rows[0];
-};
-
-const generateToken = (userId: string, email: string): string => {
-  const payload = { userId, email };
-  const secret = process.env.JWT_SECRET as string;
-  const options: SignOptions = { expiresIn: "7d" };
-  return jwt.sign(payload, secret, options);
 };

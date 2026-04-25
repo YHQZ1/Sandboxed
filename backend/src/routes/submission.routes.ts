@@ -1,11 +1,5 @@
 import { Router } from "express";
-import {
-  submit,
-  getVerdict,
-  listRoomSubmissions,
-  listParticipantSubmissions,
-} from "../controllers/submission.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import { submit, getVerdict } from "../controllers/submission.controller";
 
 const router = Router();
 

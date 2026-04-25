@@ -18,7 +18,6 @@ export const submitCode = async (
 
   const problem = await getProblemById(problemId);
 
-  // check if already solved
   const alreadySolved = await pool.query(
     `SELECT id FROM submissions 
      WHERE room_id = $1 AND problem_id = $2 AND participant_name = $3 AND status = 'accepted'`,
@@ -28,7 +27,6 @@ export const submitCode = async (
     throw new Error("Already solved");
   }
 
-  // create submission record
   const result = await pool.query(
     `INSERT INTO submissions (room_id, problem_id, participant_name, language, code, status)
      VALUES ($1, $2, $3, $4, $5, 'queued')
@@ -37,14 +35,12 @@ export const submitCode = async (
   );
   const submission = result.rows[0];
 
-  // get all test cases (including hidden) for judging
   const tcResult = await pool.query(
     `SELECT id, input, expected_output FROM test_cases 
      WHERE problem_id = $1 ORDER BY order_index`,
     [problemId],
   );
 
-  // push to judge queue
   await enqueueSubmission({
     submissionId: submission.id,
     roomCode,

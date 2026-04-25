@@ -12,17 +12,14 @@ export const initSocket = (httpServer: HttpServer): SocketServer => {
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log(`🔌 Socket connected: ${socket.id}`);
-
     registerRoomHandlers(io, socket);
     registerTimerHandlers(io, socket);
 
     socket.on("disconnect", () => {
-      console.log(`🔌 Socket disconnected: ${socket.id}`);
+      console.log(`Socket disconnected: ${socket.id}`);
     });
   });
 
-  // listen for verdict events published by the judge service
   const verdictSub = redis.duplicate();
   verdictSub.subscribe("pubsub:verdict", (err) => {
     if (err) console.error("Failed to subscribe to verdicts:", err);
@@ -31,12 +28,10 @@ export const initSocket = (httpServer: HttpServer): SocketServer => {
   verdictSub.on("message", (_channel, message) => {
     try {
       const verdict = JSON.parse(message);
-      // emit to the specific participant's socket room
       io.to(`user:${verdict.participantName}:${verdict.roomCode}`).emit(
         "verdict",
         verdict,
       );
-      // broadcast leaderboard update to the whole room
       io.to(`room:${verdict.roomCode}`).emit("leaderboard_update", {
         leaderboard: verdict.leaderboard,
       });

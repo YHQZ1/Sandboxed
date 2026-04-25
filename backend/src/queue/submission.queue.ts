@@ -18,5 +18,4 @@ export interface SubmissionJob {
 
 export const enqueueSubmission = async (job: SubmissionJob) => {
   await redis.lpush("queue:submissions", JSON.stringify(job));
-  console.log(`📬 Enqueued submission ${job.submissionId}`);
 };

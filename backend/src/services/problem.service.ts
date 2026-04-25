@@ -13,7 +13,6 @@ export const createProblem = async (
     memory_limit?: number;
   },
 ) => {
-  // get next order index
   const countResult = await pool.query(
     "SELECT COUNT(*) FROM problems WHERE room_id = $1",
     [roomId],
@@ -183,7 +182,6 @@ export const deleteTestCase = async (testCaseId: string) => {
 };
 
 export const getPublicProblems = async (roomId: string) => {
-  // for participants — hidden test cases are excluded from response
   const problems = await getProblems(roomId);
   return problems.map((p) => ({
     ...p,

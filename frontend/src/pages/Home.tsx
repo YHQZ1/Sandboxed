@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center gap-8">
       <div className="text-center">
-        <h1 className="text-6xl font-black tracking-tight mb-2">🥋 Dojo</h1>
+        <h1 className="text-6xl font-black tracking-tight mb-2">Dojo</h1>
         <p className="text-zinc-400 text-lg">
           Live competitive coding for recruiting the sharpest engineers.
         </p>
