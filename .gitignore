@@ -1,0 +1,9 @@
+node_modules/
+vendor/
+.env
+dist/
+build/
+*.o
+*.out
+.DS_Store
+*.log
