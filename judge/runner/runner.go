@@ -11,18 +11,9 @@ import (
 	"time"
 )
 
-type RunResult struct {
-	Output     string
-	TimeTaken  int // ms
-	MemoryUsed int // MB
-	TLE        bool
-	RuntimeErr bool
-	ExitCode   int
-}
-
 type TestCaseResult struct {
 	TestCaseID   string
-	Status       string // accepted | wrong_answer | tle | runtime_error
+	Status       string
 	TimeTaken    int
 	MemoryUsed   int
 	ActualOutput string
@@ -31,30 +22,27 @@ type TestCaseResult struct {
 func RunSubmission(
 	language string,
 	code string,
-	timeLimit int, // seconds
-	memoryLimit int, // MB
+	timeLimit int,
+	memoryLimit int,
 	testCases []struct {
 		ID             string
 		Input          string
 		ExpectedOutput string
 	},
 ) ([]TestCaseResult, error) {
-	// create temp working directory
 	dir, err := os.MkdirTemp("", "dojo-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(dir)
 
-	// write source file
 	srcFile, err := writeSourceFile(dir, language, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write source: %w", err)
 	}
 
-	// compile if needed
+	// compile locally for compiled languages (faster than in-container compile)
 	if err := compile(dir, language, srcFile); err != nil {
-		// compilation error — all test cases fail with CE
 		results := make([]TestCaseResult, len(testCases))
 		for i, tc := range testCases {
 			results[i] = TestCaseResult{
@@ -66,10 +54,9 @@ func RunSubmission(
 		return results, nil
 	}
 
-	// run against each test case
 	results := make([]TestCaseResult, 0, len(testCases))
 	for _, tc := range testCases {
-		result := runTestCase(dir, language, tc.Input, tc.ExpectedOutput, tc.ID, timeLimit, memoryLimit)
+		result := runInDocker(dir, language, tc.Input, tc.ExpectedOutput, tc.ID, timeLimit, memoryLimit)
 		results = append(results, result)
 	}
 
@@ -94,7 +81,6 @@ func writeSourceFile(dir, language, code string) (string, error) {
 
 func compile(dir, language, srcFile string) error {
 	var cmd *exec.Cmd
-
 	switch language {
 	case "cpp":
 		cmd = exec.Command("g++", srcFile, "-o", filepath.Join(dir, "solution"), "-O2")
@@ -103,29 +89,49 @@ func compile(dir, language, srcFile string) error {
 	case "java":
 		cmd = exec.Command("javac", srcFile)
 	default:
-		return nil // python and js don't need compilation
+		return nil
 	}
-
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Dir = dir
-
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s", stderr.String())
 	}
 	return nil
 }
 
-func runTestCase(dir, language, input, expectedOutput, testCaseID string, timeLimit, memoryLimit int) TestCaseResult {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeLimit+1)*time.Second)
+func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLimit, memoryLimit int) TestCaseResult {
+	image := dockerImage(language)
+
+	// build the run command to execute inside the container
+	runCmd := buildContainerRunCmd(language)
+
+	// docker run flags:
+	// --rm          auto-remove container after exit
+	// --network none no internet access
+	// --memory      hard memory limit
+	// --cpus         cpu limit
+	// -v            mount the temp dir read-only
+	// --workdir     set working dir inside container
+	// -i            accept stdin
+	args := []string{
+		"run", "--rm",
+		"--network", "none",
+		fmt.Sprintf("--memory=%dm", memoryLimit),
+		fmt.Sprintf("--memory-swap=%dm", memoryLimit),
+		"--cpus=1",
+		"--pids-limit=64",
+		"-v", fmt.Sprintf("%s:/code:ro", dir),
+		"--workdir", "/code",
+		"-i",
+		image,
+	}
+	args = append(args, runCmd...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeLimit+5)*time.Second)
 	defer cancel()
 
-	cmd := buildRunCommand(ctx, dir, language)
-	if cmd == nil {
-		return TestCaseResult{TestCaseID: testCaseID, Status: "runtime_error", ActualOutput: "unsupported language"}
-	}
-
-	cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = strings.NewReader(input)
 
 	var stdout, stderr bytes.Buffer
@@ -149,6 +155,14 @@ func runTestCase(dir, language, input, expectedOutput, testCaseID string, timeLi
 	}
 
 	if err != nil {
+		// check if it was TLE based on elapsed time vs limit
+		if elapsed >= timeLimit*1000 {
+			return TestCaseResult{
+				TestCaseID: testCaseID,
+				Status:     "tle",
+				TimeTaken:  elapsed,
+			}
+		}
 		return TestCaseResult{
 			TestCaseID:   testCaseID,
 			Status:       "runtime_error",
@@ -166,21 +180,31 @@ func runTestCase(dir, language, input, expectedOutput, testCaseID string, timeLi
 		TestCaseID:   testCaseID,
 		Status:       status,
 		TimeTaken:    elapsed,
-		MemoryUsed:   0, // basic version — extend with /usr/bin/time if needed
 		ActualOutput: actualOutput,
 	}
 }
 
-func buildRunCommand(ctx context.Context, dir, language string) *exec.Cmd {
+func dockerImage(language string) string {
+	images := map[string]string{
+		"python":     "python:3.12-alpine",
+		"javascript": "node:20-alpine",
+		"cpp":        "alpine:3.19",
+		"c":          "alpine:3.19",
+		"java":       "eclipse-temurin:21-jre-alpine",
+	}
+	return images[language]
+}
+
+func buildContainerRunCmd(language string) []string {
 	switch language {
-	case "cpp", "c":
-		return exec.CommandContext(ctx, filepath.Join(dir, "solution"))
-	case "java":
-		return exec.CommandContext(ctx, "java", "-Xmx256m", "-cp", dir, "Solution")
 	case "python":
-		return exec.CommandContext(ctx, "python3", filepath.Join(dir, "solution.py"))
+		return []string{"python3", "solution.py"}
 	case "javascript":
-		return exec.CommandContext(ctx, "node", filepath.Join(dir, "solution.js"))
+		return []string{"node", "solution.js"}
+	case "cpp", "c":
+		return []string{"./solution"}
+	case "java":
+		return []string{"java", "-Xmx200m", "-cp", ".", "Solution"}
 	}
 	return nil
 }

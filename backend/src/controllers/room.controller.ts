@@ -7,6 +7,7 @@ import {
   getRoomParticipants,
   removeParticipant,
   verifyRoomHost,
+  getRoomWithProblems,
 } from "../services/room.service";
 
 export const create = async (
@@ -31,11 +32,10 @@ export const create = async (
 
 export const getRoom = async (req: Request, res: Response): Promise<void> => {
   const { code } = req.params;
-
   try {
-    const room = await getRoomByCode(code.toUpperCase());
+    const room = await getRoomWithProblems(code.toUpperCase());
     const participants = await getRoomParticipants(code.toUpperCase());
-    res.json({ room, participants });
+    res.json({ room, participants, problems: room.problems });
   } catch (err: any) {
     if (err.message === "Room not found") {
       res.status(404).json({ error: err.message });

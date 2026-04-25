@@ -12,12 +12,10 @@ export const submit = async (req: Request, res: Response): Promise<void> => {
   const { roomCode, problemId, participantName, language, code } = req.body;
 
   if (!roomCode || !problemId || !participantName || !language || !code) {
-    res
-      .status(400)
-      .json({
-        error:
-          "roomCode, problemId, participantName, language and code are required",
-      });
+    res.status(400).json({
+      error:
+        "roomCode, problemId, participantName, language and code are required",
+    });
     return;
   }
 
@@ -97,17 +95,12 @@ export const listRoomSubmissions = async (
 };
 
 export const listParticipantSubmissions = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
 ): Promise<void> => {
   const { code, name } = req.params;
   try {
     const room = await getRoomByCode(code.toUpperCase());
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
-    if (!isHost) {
-      res.status(403).json({ error: "Hosts only" });
-      return;
-    }
     const submissions = await getParticipantSubmissions(room.id, name);
     res.json({ submissions });
   } catch (err: any) {

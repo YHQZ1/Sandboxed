@@ -10,6 +10,8 @@ import CodeEditor from "../components/editor/CodeEditor";
 import LanguageSelect from "../components/editor/LanguageSelect";
 import Leaderboard from "../components/leaderboard/Leaderboard";
 import ParticipantList from "../components/room/ParticipantList";
+import AddProblemModal from "../components/problems/AddProblemModal";
+import SubmissionHistory from "../components/problems/SubmissionHistory";
 import type { Language, SubmissionStatus } from "../types";
 import api from "../lib/api";
 
@@ -64,8 +66,9 @@ export default function Room() {
     score: number;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<
-    "problems" | "leaderboard" | "participants"
+    "problems" | "leaderboard" | "participants" | "submissions"
   >("problems");
+  const [showAddProblem, setShowAddProblem] = useState(false);
 
   useEffect(() => {
     if (!state?.name) {
@@ -111,7 +114,6 @@ export default function Room() {
         code: code_,
       });
     } catch (err: any) {
-      const msg = err.response?.data?.error || "runtime_error";
       setLastVerdict({ status: "runtime_error", score: 0 });
       setSubmitting(false);
     }
@@ -146,43 +148,69 @@ export default function Room() {
         <div className="w-64 border-r border-zinc-800 flex flex-col flex-shrink-0">
           {/* Tabs */}
           <div className="flex border-b border-zinc-800">
-            {(["problems", "leaderboard", "participants"] as const).map(
-              (tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-2 text-xs font-medium capitalize transition ${
-                    activeTab === tab
-                      ? "text-white border-b-2 border-white"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  {tab === "participants"
-                    ? "People"
+            {(
+              [
+                "problems",
+                "leaderboard",
+                "participants",
+                "submissions",
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium capitalize transition ${
+                  activeTab === tab
+                    ? "text-white border-b-2 border-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "participants"
+                  ? "People"
+                  : tab === "submissions"
+                    ? "History"
                     : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ),
-            )}
+              </button>
+            ))}
           </div>
 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto p-3">
-            {activeTab === "problems" &&
-              (problems.length === 0 ? (
-                <p className="text-zinc-600 text-xs text-center py-8">
-                  {myRole === "host"
-                    ? "No problems yet. Add them via API."
-                    : "Waiting for host to add problems..."}
-                </p>
-              ) : (
-                <ProblemList
-                  problems={problems}
-                  selectedId={selectedProblemId}
-                  onSelect={setSelectedProblemId}
-                />
-              ))}
+            {activeTab === "problems" && (
+              <div className="flex flex-col gap-2">
+                {myRole === "host" && (
+                  <button
+                    onClick={() => setShowAddProblem(true)}
+                    className="w-full py-2 border border-dashed border-zinc-700 rounded-lg text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 transition text-xs"
+                  >
+                    + Add Problem
+                  </button>
+                )}
+                {problems.length === 0 ? (
+                  <p className="text-zinc-600 text-xs text-center py-8">
+                    {myRole === "host"
+                      ? "No problems yet. Add one above."
+                      : "Waiting for host to add problems..."}
+                  </p>
+                ) : (
+                  <ProblemList
+                    problems={problems}
+                    selectedId={selectedProblemId}
+                    onSelect={setSelectedProblemId}
+                  />
+                )}
+              </div>
+            )}
             {activeTab === "leaderboard" && <Leaderboard />}
             {activeTab === "participants" && <ParticipantList />}
+            {activeTab === "submissions" && (
+              <SubmissionHistory
+                roomCode={code!}
+                participantName={state?.name || ""}
+                role={myRole || "viewer"}
+                problemId={selectedProblemId}
+              />
+            )}
           </div>
 
           {/* Host timer controls */}
@@ -216,9 +244,19 @@ export default function Room() {
                 </button>
               )}
               {timerStatus === "ended" && (
-                <p className="text-xs text-red-400 text-center">
-                  Contest has ended
-                </p>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-red-400 text-center">
+                    Contest has ended
+                  </p>
+                  {myRole === "host" && (
+                    <button
+                      onClick={() => navigate(`/results/${code}`)}
+                      className="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition"
+                    >
+                      View Results →
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -302,6 +340,15 @@ export default function Room() {
           </div>
         </div>
       </div>
+
+      {/* Add problem modal */}
+      {showAddProblem && (
+        <AddProblemModal
+          roomCode={code!}
+          onClose={() => setShowAddProblem(false)}
+          onAdded={() => {}}
+        />
+      )}
     </div>
   );
 }

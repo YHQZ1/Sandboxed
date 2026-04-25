@@ -182,3 +182,12 @@ export const verifyRoomHost = async (
   );
   return result.rows.length > 0;
 };
+
+export const getRoomWithProblems = async (code: string) => {
+  const room = await getRoomByCode(code);
+  const problemsResult = await pool.query(
+    `SELECT * FROM problems WHERE room_id = $1 ORDER BY order_index`,
+    [room.id],
+  );
+  return { ...room, problems: problemsResult.rows };
+};

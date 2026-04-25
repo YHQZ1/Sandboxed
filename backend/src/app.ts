@@ -55,11 +55,7 @@ app.post("/api/rooms/:code/timer/resume", authenticate, timerResume);
 
 app.use("/api/submissions", submissionRoutes);
 app.get("/api/rooms/:code/submissions", authenticate, listRoomSubmissions);
-app.get(
-  "/api/rooms/:code/submissions/:name",
-  authenticate,
-  listParticipantSubmissions,
-);
+app.get("/api/rooms/:code/submissions/:name", listParticipantSubmissions);
 
 startVerdictListener();
 
