@@ -12,12 +12,13 @@ export const updateLeaderboard = async (
   participantName: string,
   newScore: number,
   submissionId: string,
+  problemId: string, // ADD THIS
 ): Promise<void> => {
+  // dedup by participant+problem, not submissionId
   const solvedKey = `room:${roomCode}:solved`;
-  const alreadySolved = await redis.sismember(solvedKey, submissionId);
-  if (alreadySolved) {
-    return;
-  }
+  const solvedMember = `${participantName}:${problemId}`;
+  const alreadySolved = await redis.sismember(solvedKey, solvedMember);
+  if (alreadySolved) return; // already got points for this problem
 
   const metaKey = `room:${roomCode}:leaderboard:meta`;
   const existing = await redis.hget(metaKey, participantName);
@@ -33,7 +34,7 @@ export const updateLeaderboard = async (
   await redis
     .multi()
     .hset(metaKey, participantName, JSON.stringify(meta))
-    .sadd(solvedKey, submissionId)
+    .sadd(solvedKey, solvedMember) // track by participant:problemId
     .zadd(
       `room:${roomCode}:leaderboard`,
       meta.score * 1e10 - Math.floor(Date.now() / 1000),
@@ -47,4 +48,9 @@ export const getLeaderboard = async (
 ): Promise<LeaderboardEntry[]> => {
   const raw = await redis.zrevrange(`room:${roomCode}:leaderboard`, 0, -1);
   return raw.map((entry) => JSON.parse(entry) as LeaderboardEntry);
+};
+
+export const getLeaderboardFromRedis = async (roomCode: string) => {
+  const raw = await redis.zrevrange(`room:${roomCode}:leaderboard`, 0, -1);
+  return raw.map((entry) => JSON.parse(entry));
 };

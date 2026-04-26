@@ -1,4 +1,4 @@
-import Editor, { type Monaco } from "@monaco-editor/react";
+import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import type { Language } from "../../types";
 
 const MONACO_LANG: Record<Language, string> = {
@@ -35,6 +35,13 @@ const defineTheme = (monaco: Monaco) => {
   });
 };
 
+const handleEditorMount: OnMount = (editor, monaco) => {
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {});
+};
+
 export default function CodeEditor({
   language,
   value,
@@ -49,6 +56,7 @@ export default function CodeEditor({
         value={value}
         theme="dojo-dark"
         beforeMount={defineTheme}
+        onMount={handleEditorMount}
         onChange={(v) => onChange(v || "")}
         options={{
           fontSize: 13,
@@ -66,6 +74,7 @@ export default function CodeEditor({
           cursorSmoothCaretAnimation: "on",
           smoothScrolling: true,
           contextmenu: false,
+          copyWithSyntaxHighlighting: false,
           quickSuggestions: true,
           scrollbar: {
             verticalScrollbarSize: 6,

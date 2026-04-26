@@ -138,7 +138,13 @@ export const startVerdictListener = () => {
       }
 
       if (status === "accepted") {
-        await updateLeaderboard(roomCode, participantName, score, submissionId);
+        await updateLeaderboard(
+          roomCode,
+          participantName,
+          score,
+          submissionId,
+          problemId,
+        );
       }
 
       const io = getIO();

@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+.contest-active *:not(.monaco-editor *) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.monaco-editor * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@keyframes verdictPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-4px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.1) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.verdict-pop {
+  animation: verdictPop 0.4s ease-out forwards;
+}
+
+/* disable all selection and copy paste during active contest */
+.contest-active * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}

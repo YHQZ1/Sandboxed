@@ -32,16 +32,17 @@ export const submitCode = async (
     throw new Error("Only participants can submit");
   }
 
-  const problem = await getProblemById(problemId);
-
-  const alreadySolved = await pool.query(
+  const pending = await pool.query(
     `SELECT id FROM submissions 
-     WHERE room_id = $1 AND problem_id = $2 AND participant_name = $3 AND status = 'accepted'`,
+   WHERE room_id = $1 AND problem_id = $2 AND participant_name = $3 
+   AND status IN ('queued', 'judging')`,
     [room.id, problemId, participantName],
   );
-  if (alreadySolved.rows.length > 0) {
-    throw new Error("Already solved");
+  if (pending.rows.length > 0) {
+    throw new Error("Submission already pending");
   }
+
+  const problem = await getProblemById(problemId);
 
   const result = await pool.query(
     `INSERT INTO submissions (room_id, problem_id, participant_name, language, code, status)

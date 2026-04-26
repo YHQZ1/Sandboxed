@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
@@ -35,6 +36,7 @@ interface VerdictData {
   timeTaken?: number;
   memoryUsed?: number;
   problemId?: string;
+  submissionId?: string;
 }
 
 const DEFAULT_CODE: Record<Language, string> = {
@@ -153,6 +155,19 @@ export default function ParticipantRoom({ code, socket }: Props) {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [testEnded, setTestEnded] = useState(false);
   const [showEndTestConfirm, setShowEndTestConfirm] = useState(false);
+  const [toast, setToast] = useState<{
+    status: SubmissionStatus;
+    score: number;
+  } | null>(null);
+  const [testCaseResults, setTestCaseResults] = useState<
+    Array<{
+      id: string;
+      status: string;
+      time_taken: number | null;
+      is_sample: boolean;
+    }>
+  >([]);
+  const [showTestCases, setShowTestCases] = useState(false);
 
   const selectedProblem =
     problems.find((p) => p.id === selectedProblemId) || null;
@@ -235,9 +250,10 @@ export default function ParticipantRoom({ code, socket }: Props) {
   }, []);
 
   useEffect(() => {
-    const handleVerdict = (data: VerdictData) => {
+    const handleVerdict = async (data: VerdictData) => {
       const problemId = data.problemId || selectedProblemId;
       if (!problemId) return;
+
       setVerdicts((prev) => {
         const next = new Map(prev);
         next.set(problemId, {
@@ -248,8 +264,37 @@ export default function ParticipantRoom({ code, socket }: Props) {
         });
         return next;
       });
+
       if (data.status === "accepted") markProblemSolved(problemId);
       setSubmitting(false);
+
+      // show toast
+      setToast({ status: data.status, score: data.score });
+      setTimeout(() => setToast(null), 4000);
+
+      // fetch test case breakdown
+      if (data.submissionId) {
+        try {
+          const res = await api.get(`/submissions/${data.submissionId}`);
+          const results = res.data.submission.results || [];
+          // mark which ones are sample by cross-referencing with problem test cases
+          const sampleIds = new Set(
+            (problems.find((p) => p.id === problemId)?.test_cases || [])
+              .filter((tc) => tc.is_sample)
+              .map((tc) => tc.id),
+          );
+          setTestCaseResults(
+            results.map((r: any) => ({
+              ...r,
+              is_sample: sampleIds.has(r.test_case_id),
+            })),
+          );
+          setShowTestCases(true);
+          setShowOutput(false); // close run output if open
+        } catch {
+          /* ignore */
+        }
+      }
     };
     socket.on("verdict", handleVerdict);
     return () => {
@@ -281,6 +326,102 @@ export default function ParticipantRoom({ code, socket }: Props) {
       });
     }
   }, [problems]);
+
+  useEffect(() => {
+    if (timerStatus !== "active" || testEnded) return;
+
+    const blockKeys = (e: KeyboardEvent) => {
+      // block devtools
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && ["I", "J", "C", "K"].includes(e.key)) ||
+        (e.ctrlKey && e.key === "U") ||
+        (e.metaKey && e.altKey && ["I", "J", "C"].includes(e.key))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+
+      // block ALL copy paste everywhere — no exceptions
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ["c", "v", "x", "a"].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+
+      // block screenshots
+      if (
+        e.key === "PrintScreen" ||
+        (e.ctrlKey && e.shiftKey && e.key === "S")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+
+      // intercept escape to prevent silent fullscreen exit
+      if (e.key === "Escape" && document.fullscreenElement) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    const blockContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    const blockDragDrop = (e: DragEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    const blockSelectAll = (e: Event) => {
+      if (!(e.target as HTMLElement)?.closest?.(".monaco-editor")) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("keydown", blockKeys, true);
+    document.addEventListener("contextmenu", blockContextMenu, true);
+    document.addEventListener("dragover", blockDragDrop, true);
+    document.addEventListener("drop", blockDragDrop, true);
+    document.addEventListener("selectstart", blockSelectAll, true);
+
+    return () => {
+      document.removeEventListener("keydown", blockKeys, true);
+      document.removeEventListener("contextmenu", blockContextMenu, true);
+      document.removeEventListener("dragover", blockDragDrop, true);
+      document.removeEventListener("drop", blockDragDrop, true);
+      document.removeEventListener("selectstart", blockSelectAll, true);
+    };
+  }, [timerStatus, testEnded]);
+
+  useEffect(() => {
+    if (timerStatus !== "active" || testEnded) return;
+
+    const detectDevTools = () => {
+      const threshold = 160;
+      if (
+        window.outerWidth - window.innerWidth > threshold ||
+        window.outerHeight - window.innerHeight > threshold
+      ) {
+        socket.emit("proctor_violation", {
+          roomCode: code,
+          type: "DEVTOOLS_OPEN",
+          participant: myName,
+        });
+      }
+    };
+
+    const interval = setInterval(detectDevTools, 3000);
+    return () => clearInterval(interval);
+  }, [timerStatus, testEnded, code, myName, socket]);
 
   const enterFullscreen = useCallback(() => {
     document.documentElement.requestFullscreen().catch(() => {});
@@ -337,8 +478,12 @@ export default function ParticipantRoom({ code, socket }: Props) {
         language,
         code: code_,
       });
-    } catch {
+    } catch (err: any) {
       setSubmitting(false);
+      const msg = err.response?.data?.error;
+      if (msg === "Submission already pending") {
+        setToast({ status: "judging", score: 0 });
+      }
     }
   };
 
@@ -391,8 +536,49 @@ export default function ParticipantRoom({ code, socket }: Props) {
     : null;
 
   return (
-    <div className="h-screen bg-[#0a0a0a] text-[#ededed] flex flex-col overflow-hidden selection:bg-[#262626]">
+    <div
+      className={`h-screen bg-[#0a0a0a] text-[#ededed] flex flex-col overflow-hidden selection:bg-[#262626] ${timerStatus === "active" && !testEnded ? "contest-active" : ""}`}
+    >
       <RoomHeader />
+
+      {toast && (
+        <div
+          className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-sm border shadow-2xl transition-all animate-in slide-in-from-top-2 duration-300 ${
+            toast.status === "accepted"
+              ? "bg-[#0a1a0a] border-[#8BA888]/30 text-[#8BA888]"
+              : toast.status === "compilation_error"
+                ? "bg-[#1a0a0a] border-[#C27373]/30 text-[#C27373]"
+                : "bg-[#1a0a0a] border-[#C27373]/30 text-[#C27373]"
+          }`}
+        >
+          <div
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              toast.status === "accepted" ? "bg-[#8BA888]" : "bg-[#C27373]"
+            }`}
+          />
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest">
+              {VERDICT_LABEL[toast.status]}
+            </p>
+            {toast.status === "accepted" && toast.score > 0 && (
+              <p className="text-[10px] opacity-60 mt-0.5">
+                +{toast.score} points added
+              </p>
+            )}
+            {toast.status === "accepted" && toast.score === 0 && (
+              <p className="text-[10px] opacity-60 mt-0.5">
+                Already solved — no new points
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            className="ml-2 opacity-40 hover:opacity-100 text-lg leading-none"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {testEnded && (
         <div className="h-10 bg-[#171717] border-b border-[#262626] flex items-center justify-center flex-shrink-0">
@@ -543,61 +729,141 @@ export default function ParticipantRoom({ code, socket }: Props) {
               />
             </div>
 
-            {showOutput && (
+            {(showOutput || showTestCases) && (
               <div className="h-[35%] border-t border-[#262626] flex flex-col min-h-0">
                 <div className="px-6 py-3 flex items-center justify-between border-b border-[#262626]">
-                  <span className="text-[9px] font-bold tracking-[0.3em] text-[#404040]">
-                    Run Output
-                  </span>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => {
+                        setShowOutput(true);
+                        setShowTestCases(false);
+                      }}
+                      className={`text-[9px] font-bold tracking-[0.3em] uppercase transition-colors ${showOutput && !showTestCases ? "text-[#ededed]" : "text-[#404040] hover:text-[#737373]"}`}
+                    >
+                      Run Output
+                    </button>
+                    {testCaseResults.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setShowTestCases(true);
+                          setShowOutput(false);
+                        }}
+                        className={`text-[9px] font-bold tracking-[0.3em] uppercase transition-colors ${showTestCases ? "text-[#ededed]" : "text-[#404040] hover:text-[#737373]"}`}
+                      >
+                        Test Cases (
+                        {
+                          testCaseResults.filter((r) => r.status === "accepted")
+                            .length
+                        }
+                        /{testCaseResults.length})
+                      </button>
+                    )}
+                  </div>
                   <button
-                    onClick={() => setShowOutput(false)}
+                    onClick={() => {
+                      setShowOutput(false);
+                      setShowTestCases(false);
+                    }}
                     className="text-[#404040] hover:text-[#ededed] text-lg leading-none"
                   >
                     &times;
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                  {running ? (
-                    <div className="text-[10px] text-[#404040] animate-pulse">
-                      Executing...
-                    </div>
-                  ) : (
-                    runResults.map((res, i) => (
-                      <div key={i} className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${res.passed ? "bg-[#8BA888]" : "bg-[#C27373]"}`}
-                          />
-                          <span
-                            className={`text-[10px] font-bold uppercase tracking-widest ${res.passed ? "text-[#8BA888]" : "text-[#C27373]"}`}
-                          >
-                            Case {i + 1}: {res.passed ? "Passed" : "Failed"}
-                          </span>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                  {showOutput &&
+                    !showTestCases &&
+                    (running ? (
+                      <div className="text-[10px] text-[#404040] animate-pulse">
+                        Executing...
+                      </div>
+                    ) : (
+                      runResults.map((res, i) => (
+                        <div key={i} className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-1.5 h-1.5 rounded-full ${res.passed ? "bg-[#8BA888]" : "bg-[#C27373]"}`}
+                            />
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-widest ${res.passed ? "text-[#8BA888]" : "text-[#C27373]"}`}
+                            >
+                              Case {i + 1}: {res.passed ? "Passed" : "Failed"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {[
+                              { label: "Input", value: res.input },
+                              { label: "Expected", value: res.expected },
+                              {
+                                label: "Actual",
+                                value: res.error || res.actual,
+                                isError: !!res.error,
+                              },
+                            ].map(({ label, value, isError }) => (
+                              <div key={label}>
+                                <span className="text-[9px] font-bold text-[#404040] uppercase mb-1 block">
+                                  {label}
+                                </span>
+                                <pre
+                                  className={`p-3 bg-[#0a0a0a] border border-[#262626] text-[11px] rounded-sm overflow-x-auto ${isError ? "text-[#C27373]" : "text-[#737373]"}`}
+                                >
+                                  {value || "—"}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {[
-                            { label: "Input", value: res.input },
-                            { label: "Expected", value: res.expected },
-                            {
-                              label: "Actual",
-                              value: res.error || res.actual,
-                              isError: !!res.error,
-                            },
-                          ].map(({ label, value, isError }) => (
-                            <div key={label}>
-                              <span className="text-[9px] font-bold text-[#404040] uppercase mb-1 block">
+                      ))
+                    ))}
+
+                  {showTestCases && (
+                    <div className="space-y-2">
+                      {(() => {
+                        let sampleCount = 0;
+                        let hiddenCount = 0;
+                        return testCaseResults.map((r) => {
+                          const num = r.is_sample
+                            ? ++sampleCount
+                            : ++hiddenCount;
+                          const label = r.is_sample
+                            ? `Test Case ${num}`
+                            : `Test Case ${sampleCount + num} (hidden)`;
+                          return (
+                            <div
+                              key={r.id}
+                              className="flex items-center gap-3 py-2 border-b border-[#262626]/50 last:border-0"
+                            >
+                              <div
+                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${r.status === "accepted" ? "bg-[#8BA888]" : "bg-[#C27373]"}`}
+                              />
+                              <span className="text-[10px] text-[#737373] flex-shrink-0 min-w-[140px]">
                                 {label}
                               </span>
-                              <pre
-                                className={`p-3 bg-[#0a0a0a] border border-[#262626] text-[11px] rounded-sm overflow-x-auto ${isError ? "text-[#C27373]" : "text-[#737373]"}`}
+                              <span
+                                className={`text-[10px] font-bold uppercase tracking-wider flex-1 ${r.status === "accepted" ? "text-[#8BA888]" : "text-[#C27373]"}`}
                               >
-                                {value || "—"}
-                              </pre>
+                                {r.status === "accepted"
+                                  ? "Passed"
+                                  : r.status === "tle"
+                                    ? "Time Limit Exceeded"
+                                    : r.status === "runtime_error"
+                                      ? "Runtime Error"
+                                      : "Wrong Answer"}
+                              </span>
+                              {r.time_taken && (
+                                <span className="text-[10px] text-[#404040] tabular-nums">
+                                  {r.time_taken}ms
+                                </span>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
+                          );
+                        });
+                      })()}
+                      <p className="text-[9px] text-[#404040] pt-2">
+                        Hidden test cases show status only — inputs and expected
+                        outputs are not revealed.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

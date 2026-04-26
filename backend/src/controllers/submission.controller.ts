@@ -42,7 +42,11 @@ export const submit = async (req: Request, res: Response): Promise<void> => {
         "Room not found",
         "Contest is not active",
         "Already solved",
+        "Submission already pending",
+        "Only participants can submit",
+        "Participant not found in room",
         "Problem not found",
+        "Judge service unavailable",
       ];
       if (clientErrors.includes(err.message)) {
         res.status(400).json({ error: err.message });

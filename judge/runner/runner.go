@@ -189,11 +189,11 @@ func buildContainerRunCmd(language string) []string {
 	case "javascript":
 		return []string{"node", "solution.js"}
 	case "cpp":
-		return []string{"sh", "-c", "g++ -O2 solution.cpp -o solution && ./solution"}
+		return []string{"sh", "-c", "g++ -O2 solution.cpp -o solution 2>&1 && ./solution"}
 	case "c":
-		return []string{"sh", "-c", "gcc solution.c -o solution && ./solution"}
+		return []string{"sh", "-c", "gcc solution.c -o solution 2>&1 && ./solution"}
 	case "java":
-		return []string{"sh", "-c", "cd /code && javac Solution.java && java -Xmx200m Solution"}
+		return []string{"sh", "-c", "javac Solution.java 2>&1 && java -Xmx200m Solution"}
 	}
 	return nil
 }

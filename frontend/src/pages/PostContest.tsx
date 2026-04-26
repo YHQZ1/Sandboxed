@@ -108,6 +108,8 @@ export default function PostContest() {
           submissionsRes.data.submissions || [];
         const map = new Map<string, ParticipantSummary>();
 
+        const solvedProblems = new Set<string>();
+
         for (const s of allSubmissions) {
           if (!map.has(s.participant_name)) {
             map.set(s.participant_name, {
@@ -118,7 +120,10 @@ export default function PostContest() {
             });
           }
           map.get(s.participant_name)!.submissions.push(s);
-          if (s.status === "accepted") {
+
+          const solvedKey = `${s.participant_name}:${s.problem_id}`;
+          if (s.status === "accepted" && !solvedProblems.has(solvedKey)) {
+            solvedProblems.add(solvedKey);
             map.get(s.participant_name)!.score += s.score;
             map.get(s.participant_name)!.solvedCount += 1;
           }
@@ -127,18 +132,36 @@ export default function PostContest() {
         const sorted = Array.from(map.values()).sort(
           (a, b) => b.score - a.score,
         );
+
+        sorted.forEach((p) => {
+          p.submissions.sort(
+            (a, b) =>
+              new Date(b.submitted_at).getTime() -
+              new Date(a.submitted_at).getTime(),
+          );
+        });
+
         setParticipants(sorted);
         if (sorted.length > 0) setSelectedParticipant(sorted[0].name);
       } else {
         const mySubmissions: SubmissionRecord[] =
           submissionsRes.data.submissions || [];
+        const solvedProblems = new Set<string>();
+        let totalScore = 0;
+        let solvedCount = 0;
+
+        for (const s of mySubmissions) {
+          if (s.status === "accepted" && !solvedProblems.has(s.problem_id)) {
+            solvedProblems.add(s.problem_id);
+            totalScore += s.score;
+            solvedCount += 1;
+          }
+        }
+
         const stats: ParticipantSummary = {
           name: participantName,
-          score: mySubmissions
-            .filter((s) => s.status === "accepted")
-            .reduce((sum, s) => sum + s.score, 0),
-          solvedCount: mySubmissions.filter((s) => s.status === "accepted")
-            .length,
+          score: totalScore,
+          solvedCount,
           submissions: mySubmissions,
         };
         setMyStats(stats);
@@ -190,9 +213,7 @@ export default function PostContest() {
     const p = participants.find((p) => p.name === participantName);
     if (!p) return null;
     const subs = p.submissions.filter((s) => s.problem_id === problemId);
-    return (
-      subs.find((s) => s.status === "accepted") || subs[subs.length - 1] || null
-    );
+    return subs.find((s) => s.status === "accepted") || subs[0] || null;
   };
 
   const fmt = (iso: string) =>
