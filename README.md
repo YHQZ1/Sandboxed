@@ -1,21 +1,24 @@
-Here's the updated `README.md` reflecting the fully refactored codebase — accurate architecture, flows, tech stack, API, and project structure.
+# Dojo
 
----
+A live competitive coding platform built for recruiting competitive programmers.
 
-# 🥋 Dojo
-
-> A live competitive coding platform built for recruiting competitive programmers. Spin up a contest room, share a code, and let candidates compete — all in real time.
+![React](https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat-square&logo=react&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=flat-square&logo=node.js&logoColor=white)
+![Go](https://img.shields.io/badge/Go-Judge%20Service-00ADD8?style=flat-square&logo=go&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Socket.io-Real--time-010101?style=flat-square&logo=socket.io&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-Cache%20%7C%20Pub%2FSub-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Sandbox-2496ED?style=flat-square&logo=docker&logoColor=white)
 
 ---
 
 ## Table of Contents
 
 - [What is Dojo?](#what-is-dojo)
-- [Features](#features)
-- [Roles](#roles)
+- [Architecture](#architecture)
+- [Services](#services)
 - [Contest Flow](#contest-flow)
 - [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
 - [Database Schema](#database-schema)
 - [API Design](#api-design)
 - [WebSocket Events](#websocket-events)
@@ -29,71 +32,104 @@ Here's the updated `README.md` reflecting the fully refactored codebase — accu
 
 ## What is Dojo?
 
-Dojo is a self-hosted, invite-only coding contest platform designed for **recruiting competitive programmers**. Instead of sending candidates to LeetCode or HackerRank, you run your own contest — on your own platform, with your own problems, your own rules, and full visibility into every submission.
+Dojo is a self-hosted, invite-only coding contest platform built for recruiting competitive programmers. Instead of sending candidates to LeetCode or HackerRank, you run your own contest on your own platform — with your own problems, your own rules, and full visibility into every submission.
 
-A host creates a room, gets a short 6‑character room code, and shares it. Candidates join as participants, co‑recruiters join as hosts, and anyone else can watch as a viewer. The host posts problems, starts a timer, and watches the live leaderboard update in real time as participants submit code.
+A host creates a room and gets a 6-character room code to share. Candidates join as participants, co-recruiters join as hosts, and anyone else can watch as a viewer. The host posts problems, starts a timer, and watches the live leaderboard update in real time as participants submit code.
 
 After the contest, hosts can review every submission, every test case result, and every line of code each candidate wrote.
 
----
+| Role        | Can Code | On Leaderboard | Can Manage Room | Needs Account |
+| ----------- | -------- | -------------- | --------------- | ------------- |
+| Host        | No       | No             | Yes             | Yes           |
+| Participant | Yes      | Yes            | No              | No            |
+| Viewer      | No       | No             | No              | No            |
 
-## Features
-
-### For Hosts
-
-- Create a contest room and get a shareable room code (e.g. `abc123`)
-- Multiple hosts supported — co‑recruiters can join the same room as a host
-- Post problems with visible sample test cases and hidden judge test cases
-- Control the contest timer — start, pause, resume, and end
-- View all participant submissions, code, and per‑test‑case results post‑contest
-- Remove participants or viewers from the room
-- Set point values, time limits, and memory limits per problem
-
-### For Participants
-
-- Join via room code with just a name — no account needed
-- Read problems and write code in the built‑in Monaco Editor
-- Run code against visible sample test cases before submitting
-- Submit for full judging against all hidden test cases
-- Receive live verdicts — AC, WA, TLE, RE, CE
-- Appear on the live leaderboard
-- Proctored environment: fullscreen required, violation warnings with auto‑kick after 4 violations
-
-### For Viewers (Spectators)
-
-- Join via room code as a read‑only observer
-- Watch the live leaderboard update in real time
-- See contest progress without being able to submit
-
-### Supported Languages
-
-| Language   | Compile inside Docker sandbox      | Run                            |
-| ---------- | ---------------------------------- | ------------------------------ |
-| C++        | `g++ -O2 solution.cpp -o solution` | `./solution`                   |
-| C          | `gcc solution.c -o solution`       | `./solution`                   |
-| Java       | `javac Solution.java`              | `java -Xmx200m -cp . Solution` |
-| Python     | —                                  | `python3 solution.py`          |
-| JavaScript | —                                  | `node solution.js`             |
-
-All compilation and execution happens inside disposable Docker containers with no host compilers needed.
+Participants and viewers are sessionless — no account required. Their identity within a room is their name + room code, stored in Redis for the duration of the contest.
 
 ---
 
-## Roles
+## Architecture
 
-| Role            | Can Code | On Leaderboard | Can Manage Room | Needs Account |
-| --------------- | -------- | -------------- | --------------- | ------------- |
-| **Host**        | No       | No             | Yes             | Yes           |
-| **Participant** | Yes      | Yes            | No              | No            |
-| **Viewer**      | No       | No             | No              | No            |
+Dojo runs as three independently deployed processes: a React frontend, a Node.js backend, and a Go judge service. The backend is the central coordinator — it owns the REST API, the WebSocket layer, and all state in PostgreSQL and Redis. The judge service is a stateless HTTP worker that receives submissions, executes them in isolated Docker containers, and publishes verdicts back via Redis Pub/Sub.
 
-When joining a contest, every user fills in three things:
+```
++------------------------------------------+
+|            React Frontend                |
+|   Monaco Editor · Socket.io client       |
++----------------+---------------+---------+
+                 | REST          | WebSocket
+                 v               v
++------------------------------------------+
+|      Node.js + Express + TypeScript      |
+|    Auth · Rooms · Problems · Socket      |
++-----------+------------------------------+
+            |                  |
+            v                  v
++----------------+    +--------------------+
+|  PostgreSQL    |    |       Redis        |
+|  (Persistent)  |    | Room State · Timer |
+|                |    | Cache · Pub/Sub    |
++----------------+    +--------+-----------+
+                               |
+                     HTTP /submit
+                               v
+                      +------------------+
+                      |  Judge Service   |
+                      |      (Go)        |
+                      |  Docker Sandbox  |
+                      +--------+---------+
+                               |
+                     Verdict via Redis Pub/Sub
+                               v
+                      +------------------+
+                      |    Backend       |
+                      | verdict.listener |
+                      +--------+---------+
+                               |
+                     WebSocket push to room
+                               v
+                      +------------------+
+                      |    Frontend      |
+                      +------------------+
+```
 
-1. Their **name**
-2. Their **role** — Host, Participant, or Viewer
-3. The **room code**
+### Submission Flow
 
-Participants and viewers are sessionless — no account required. Their identity within a room is their name + room code combined, stored in Redis for the duration of the contest.
+1. Participant clicks Submit
+2. `POST /api/submissions` — backend receives code, language, and problemId
+3. Backend validates participant is in room, room is active, and problem not already solved
+4. Backend saves submission to PostgreSQL with status `queued`
+5. Backend sends `HTTP POST` to judge service at `/submit` with all test cases
+6. Backend immediately returns `{ submissionId, status: "queued" }` to frontend
+7. Judge processes asynchronously — runs code in a Docker container per test case, enforces time and memory limits
+8. Judge publishes verdict to Redis Pub/Sub channel `pubsub:verdict`
+9. Backend `verdict.listener` picks it up, updates PostgreSQL, updates Redis leaderboard
+10. Backend pushes verdict to the participant and broadcasts the updated leaderboard to the room via WebSocket
+
+### Proctoring Flow
+
+During an active contest, participants are required to stay in fullscreen. Tab switches and window blurs emit a `proctor_violation` event via WebSocket. The backend increments a violation counter in Redis (TTL 1 hour). On the fourth violation the participant is kicked — removed from the participant list and their frontend receives a `kicked` event.
+
+---
+
+## Services
+
+### Backend — Node.js + Express + TypeScript `:4000`
+
+The central coordinator. Owns authentication, room lifecycle, problem management, the WebSocket hub, and all state across PostgreSQL and Redis.
+
+- JWT-based auth for host accounts
+- Room creation, join validation, and participant management
+- Timer state stored in Redis and controlled entirely via WebSocket — no REST endpoints
+- Subscribes to `pubsub:verdict` and fans results out to connected clients
+
+### Judge Service — Go `:5001`
+
+A stateless HTTP worker. Receives a submission payload (code, language, test cases, limits), compiles and runs the code inside a Docker sandbox per test case, and publishes the verdict to Redis. Has no PostgreSQL dependency.
+
+- Supports C++, C, Java, Python, JavaScript
+- All compilation happens inside the sandbox image — no host compilers required
+- Time limit, memory limit, network access, and process count enforced via Docker flags
 
 ---
 
@@ -101,24 +137,24 @@ Participants and viewers are sessionless — no account required. Their identity
 
 ```
 Host creates room
-      ↓
-Gets room code → shares with candidates (Participant),
-                  co‑recruiters (Host) and observers (Viewer)
-      ↓
-Everyone joins → picks name + role + enters code
-      ↓
+      |
+Gets room code -> shares with candidates (Participant),
+                  co-recruiters (Host), observers (Viewer)
+      |
+Everyone joins -> picks name + role + enters code
+      |
 Host posts problems with test cases
-      ↓
-Host starts timer (e.g. 90 minutes)
-      ↓
+      |
+Host starts timer
+      |
 Participants write and submit code
-      ↓
-Judge service sandboxes and executes code against all test cases
-      ↓
-Verdict returned → leaderboard updates live for everyone
-      ↓
-Timer ends → room locked → no more submissions
-      ↓
+      |
+Judge sandboxes and executes code against all test cases
+      |
+Verdict returned -> leaderboard updates live for everyone
+      |
+Timer ends -> room locked -> no more submissions
+      |
 Hosts review every candidate's code and results
 ```
 
@@ -132,161 +168,36 @@ Hosts review every candidate's code and results
 | ------------------ | ---------------------------------------------------------- |
 | React + TypeScript | UI framework, fully typed                                  |
 | Monaco Editor      | VS Code's editor — syntax highlighting for all 5 languages |
-| Socket.io Client   | Real‑time leaderboard, timer, room events                  |
-| TailwindCSS        | Utility‑first styling                                      |
-| Zustand            | Global state — room state, timer, leaderboard              |
+| Socket.io Client   | Real-time leaderboard, timer, room events                  |
+| TailwindCSS        | Utility-first styling                                      |
+| Zustand            | Global state — room, timer, leaderboard                    |
 
 ### Backend
 
-| Technology                     | Purpose                                              |
-| ------------------------------ | ---------------------------------------------------- |
-| Node.js + Express + TypeScript | Main API server                                      |
-| Socket.io                      | WebSocket server — real‑time events                  |
-| Redis Pub/Sub                  | Event broadcasting between backend and judge service |
-| Redis (hashes, sorted sets)    | Room state, timer, leaderboard, participant list     |
-| JWT + bcrypt                   | Authentication for host accounts                     |
-| Axios                          | HTTP communication with judge service                |
+| Technology                     | Purpose                                          |
+| ------------------------------ | ------------------------------------------------ |
+| Node.js + Express + TypeScript | Main API server                                  |
+| Socket.io                      | WebSocket server                                 |
+| Redis Pub/Sub                  | Verdict broadcasting from judge to backend       |
+| Redis (hashes, sorted sets)    | Room state, timer, leaderboard, participant list |
+| JWT + bcrypt                   | Authentication for host accounts                 |
 
-### Judge Service
+### Judge
 
 | Technology | Purpose                                |
 | ---------- | -------------------------------------- |
 | Go         | Fast, concurrent HTTP server           |
 | Docker CLI | Isolated sandbox per submission        |
-| Redis      | Publishing verdicts to pub/sub channel |
-
-### Database
-
-| Technology | Purpose                                                |
-| ---------- | ------------------------------------------------------ |
-| PostgreSQL | All persistent data                                    |
-| Redis      | Room state, timer, leaderboard cache, participant list |
+| Redis      | Publishing verdicts to Pub/Sub channel |
 
 ### Infrastructure
 
 | Technology     | Purpose                                  |
 | -------------- | ---------------------------------------- |
+| PostgreSQL     | All persistent data                      |
+| Redis          | Room state, timer, leaderboard cache     |
 | Docker Compose | Runs entire stack locally in one command |
 | Docker         | Sandbox containers for code execution    |
-
----
-
-## Architecture
-
-### Overview
-
-Dojo is composed of **4 services** that communicate through PostgreSQL, Redis, and WebSockets:
-
-```
-┌─────────────────────────────────────┐
-│         React Frontend              │
-│  (Monaco Editor + Socket.io client) │
-└────────────┬───────────────┬────────┘
-             │ REST          │ WebSocket
-             ▼               ▼
-┌─────────────────────────────────────┐
-│      Node.js + Express + TS         │
-│         Backend API                 │
-│   (Auth, Rooms, Problems, Socket)   │
-└──────┬──────────────────┬───────────┘
-       │                  │
-       ▼                  ▼
-┌─────────────┐    ┌──────────────────┐
-│ PostgreSQL  │    │      Redis        │
-│ (Persistent │    │ (Room State,     │
-│   Storage)  │    │  Timer, Cache,   │
-└─────────────┘    │  Pub/Sub)        │
-                   └────────┬─────────┘
-                            │ HTTP /submit
-                            ▼
-                   ┌──────────────────┐
-                   │  Judge Service   │
-                   │      (Go)        │
-                   │  Docker Sandbox  │
-                   └────────┬─────────┘
-                            │ Verdict via Redis PubSub
-                            ▼
-                   ┌──────────────────┐
-                   │    Backend       │
-                   │ (verdict.listener)
-                   └────────┬─────────┘
-                            │ WebSocket push to room
-                            ▼
-                   ┌──────────────────┐
-                   │     Frontend     │
-                   └──────────────────┘
-```
-
-### Submission Flow (Step by Step)
-
-```
-1. Participant clicks Submit
-2. POST /api/submissions → Backend receives code + language + problemId
-3. Backend validates participant is in room, room is active, and not already solved
-4. Backend saves submission to PostgreSQL with status: "queued"
-5. Backend sends HTTP POST to judge service at /submit with all test cases
-6. Backend immediately returns { submissionId, status: "queued" } to frontend
-7. Judge starts processing asynchronously, updates status to "judging"
-8. Judge creates a temp directory, writes source file
-9. For compiled languages, builds a Docker run command that compiles then runs
-10. For each test case:
-    - Spins up the appropriate sandbox container
-    - Pipes input via stdin
-    - Captures stdout
-    - Enforces time and memory limits via Docker flags
-    - Compares output to expected output
-    - Records result per test case
-11. Final verdict determined (AC, WA, TLE, RE, CE)
-12. Judge publishes verdict to Redis PubSub channel "pubsub:verdict"
-13. Backend verdict.listener picks up the message
-14. Backend updates submission status/score in PostgreSQL
-15. Backend inserts per‑test‑case results into submission_results table
-16. If AC, updates leaderboard in Redis sorted set (idempotent via solved set)
-17. Backend pushes verdict to the participant via WebSocket
-18. Backend broadcasts updated leaderboard to entire room via WebSocket
-19. Backend emits submission_update event for the live feed
-```
-
-### Timer Flow
-
-```
-Host clicks Start →
-  Server-side interval begins, ticking every second
-  Timer state stored in Redis hash (room:{code}:timer)
-  SQL updated to status "active"
-  Every second → broadcasts timer_tick to entire room
-
-Host clicks Pause →
-  Calculates elapsed time, stores in Redis
-  Clears interval, broadcasts paused state
-  SQL status "paused" with timer_elapsed
-
-Host clicks Resume →
-  Recalculates startedAt, resumes interval
-  Redis and SQL updated to "active"
-
-Timer hits 0 (or Host clicks End) →
-  Interval cleared
-  Room status set to "ended" in PostgreSQL
-  Final leaderboard fetched from Redis
-  contest_ended broadcast to all room members
-  No more submissions accepted
-```
-
-### Proctoring Flow
-
-```
-Participant enters room →
-  During active contest, fullscreen mode is required
-  Fullscreen prompt overlay shown until user enters fullscreen
-
-Tab switch or window blur →
-  Frontend emits proctor_violation event via WebSocket
-  Backend increments violation counter in Redis (expires after 1 hour)
-  If count < 4 → frontend receives violation_warning with current count
-  If count >= 4 → participant is kicked, removed from Redis participant list,
-                  frontend receives kicked event with reason
-```
 
 ---
 
@@ -294,7 +205,7 @@ Tab switch or window blur →
 
 ### `users`
 
-Stores host accounts only. Participants and viewers are sessionless.
+Host accounts only. Participants and viewers are sessionless.
 
 ```sql
 CREATE TABLE users (
@@ -313,20 +224,20 @@ Each contest room. Tracks timer state and current status.
 ```sql
 CREATE TABLE rooms (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code             VARCHAR(20) UNIQUE NOT NULL,   -- e.g. abc123
+  code             VARCHAR(20) UNIQUE NOT NULL,
   name             VARCHAR(255) NOT NULL,
   created_by       UUID REFERENCES users(id),
   status           VARCHAR(20) DEFAULT 'waiting', -- waiting | active | paused | ended
-  timer_duration   INTEGER,                       -- total duration in seconds
-  timer_started_at TIMESTAMP,                     -- when timer was last started/resumed
-  timer_elapsed    INTEGER DEFAULT 0,             -- seconds elapsed before last pause
+  timer_duration   INTEGER,
+  timer_started_at TIMESTAMP,
+  timer_elapsed    INTEGER DEFAULT 0,
   created_at       TIMESTAMP DEFAULT NOW()
 );
 ```
 
 ### `room_hosts`
 
-Tracks which host accounts are co‑hosting a room.
+Tracks which host accounts are co-hosting a room.
 
 ```sql
 CREATE TABLE room_hosts (
@@ -340,8 +251,6 @@ CREATE TABLE room_hosts (
 
 ### `problems`
 
-Problems posted by hosts inside a room.
-
 ```sql
 CREATE TABLE problems (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -352,16 +261,14 @@ CREATE TABLE problems (
   output_format  TEXT,
   constraints    TEXT,
   points         INTEGER DEFAULT 100,
-  time_limit     INTEGER DEFAULT 2,     -- seconds
-  memory_limit   INTEGER DEFAULT 256,   -- MB
-  order_index    INTEGER DEFAULT 0,     -- problem ordering A, B, C...
+  time_limit     INTEGER DEFAULT 2,    -- seconds
+  memory_limit   INTEGER DEFAULT 256,  -- MB
+  order_index    INTEGER DEFAULT 0,
   created_at     TIMESTAMP DEFAULT NOW()
 );
 ```
 
 ### `test_cases`
-
-Each problem has multiple test cases. Sample ones are visible to participants.
 
 ```sql
 CREATE TABLE test_cases (
@@ -369,82 +276,66 @@ CREATE TABLE test_cases (
   problem_id      UUID REFERENCES problems(id) ON DELETE CASCADE,
   input           TEXT NOT NULL,
   expected_output TEXT NOT NULL,
-  is_sample       BOOLEAN DEFAULT FALSE, -- TRUE = visible, FALSE = hidden judge case
+  is_sample       BOOLEAN DEFAULT FALSE,
   order_index     INTEGER DEFAULT 0
 );
 ```
 
-### `submissions`
+`is_sample = TRUE` cases are visible to participants. Hidden cases are judge-only.
 
-Every code submission by a participant.
+### `submissions`
 
 ```sql
 CREATE TABLE submissions (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id          UUID REFERENCES rooms(id) ON DELETE CASCADE,
   problem_id       UUID REFERENCES problems(id),
-  participant_name VARCHAR(100) NOT NULL,          -- name they entered on join
-  language         VARCHAR(20) NOT NULL,           -- cpp | c | java | python | javascript
+  participant_name VARCHAR(100) NOT NULL,
+  language         VARCHAR(20) NOT NULL,  -- cpp | c | java | python | javascript
   code             TEXT NOT NULL,
-  status           VARCHAR(30) DEFAULT 'queued',  -- queued | judging | accepted | wrong_answer | tle | runtime_error | compilation_error
+  status           VARCHAR(30) DEFAULT 'queued',
   score            INTEGER DEFAULT 0,
-  time_taken       INTEGER,                        -- ms, fastest accepted run
-  memory_used      INTEGER,                        -- MB
+  time_taken       INTEGER,
+  memory_used      INTEGER,
   submitted_at     TIMESTAMP DEFAULT NOW()
 );
 ```
 
+Statuses: `queued` → `judging` → `accepted` | `wrong_answer` | `tle` | `runtime_error` | `compilation_error`
+
 ### `submission_results`
 
-Per test case results for every submission. Lets hosts see exactly where a candidate failed.
+Per-test-case results. Lets hosts see exactly where a candidate failed.
 
 ```sql
 CREATE TABLE submission_results (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   submission_id  UUID REFERENCES submissions(id) ON DELETE CASCADE,
   test_case_id   UUID REFERENCES test_cases(id),
-  status         VARCHAR(30) NOT NULL, -- accepted | wrong_answer | tle | runtime_error
-  time_taken     INTEGER,              -- ms
-  memory_used    INTEGER,              -- MB
-  actual_output  TEXT                 -- what the code actually printed
+  status         VARCHAR(30) NOT NULL,
+  time_taken     INTEGER,
+  memory_used    INTEGER,
+  actual_output  TEXT
 );
 ```
 
 ### Redis Keys
 
 ```
-room:{code}:participants     Hash   → { name: { role, joinedAt } }
-room:{code}:timer            Hash   → { duration, startedAt, elapsed, status }
-room:{code}:leaderboard      ZSet   → participant JSON sorted by score (tiebreak by time)
-room:{code}:leaderboard:meta Hash   → per‑participant solved count, last accepted time
-room:{code}:solved           Set    → submission IDs (prevents double scoring)
-room:{code}:violations:{name} String → violation counter (TTL 1 hour)
-pubsub:verdict               PubSub → channel from judge → backend
-queue:submissions            List   → (deprecated, replaced by direct HTTP call)
+room:{code}:participants        Hash   -> { name: { role, joinedAt } }
+room:{code}:timer               Hash   -> { duration, startedAt, elapsed, status }
+room:{code}:leaderboard         ZSet   -> participant JSON sorted by score (tiebreak by time)
+room:{code}:leaderboard:meta    Hash   -> per-participant solved count, last accepted time
+room:{code}:solved              Set    -> submission IDs (prevents double scoring)
+room:{code}:violations:{name}   String -> violation counter (TTL 1 hour)
+pubsub:verdict                  PubSub -> channel from judge to backend
 ```
 
-### Relationships
+### Scoring
 
-```
-users
-  └── creates ──────────────→ rooms
-                                ├── has many ──→ room_hosts (co‑hosts)
-                                ├── has many ──→ problems
-                                │                 └── has many → test_cases
-                                └── has many ──→ submissions
-                                                  └── has many → submission_results
-```
+First accepted submission for a problem awards full points. Subsequent accepted submissions for the same problem score nothing, enforced by the Redis solved set. Wrong answers score 0 and are tracked as attempts.
 
-### Scoring Logic
-
-- First accepted submission for a problem → full points awarded
-- Subsequent accepted submissions for same problem → no additional points (enforced by Redis solved set)
-- Wrong answer → 0 points, tracked as an attempt
-
-**Leaderboard ranking:**
-
-1. Total points — descending
-2. Tiebreak — total time of accepted submissions — ascending (faster wins)
+Leaderboard ranking: total points descending, tiebroken by total time of accepted submissions ascending.
 
 ---
 
@@ -453,48 +344,46 @@ users
 ### Auth
 
 ```
-POST   /api/auth/register        Create host account
-POST   /api/auth/login           Login, receive JWT
-GET    /api/auth/me              Get current host profile
+POST  /api/auth/register    Create host account
+POST  /api/auth/login       Login, receive JWT
+GET   /api/auth/me          Get current host profile
 ```
-
-Frontend uses a single `/auth` page with `?mode=login` or `?mode=register` search params.
 
 ### Rooms
 
 ```
-POST   /api/rooms                Create a new contest room (auth required)
-GET    /api/rooms/:code          Get room details by code (problems filtered by role)
-POST   /api/rooms/:code/join     Join a room (name + role + code; host requires JWT)
-DELETE /api/rooms/:code/participants/:name  Kick participant (host only)
+POST    /api/rooms                              Create a new contest room (auth required)
+GET     /api/rooms/:code                        Get room details by code
+POST    /api/rooms/:code/join                   Join a room (host requires JWT)
+DELETE  /api/rooms/:code/participants/:name     Kick participant (host only)
 ```
 
-Timer is controlled exclusively via WebSocket events — no REST endpoints for timer.
+Timer is controlled exclusively via WebSocket — no REST endpoints.
 
 ### Problems
 
 ```
-GET     /api/rooms/:code/problems                   List problems (public or full based on role)
-POST    /api/rooms/:code/problems                   Create a problem (host only)
-PUT     /api/rooms/:code/problems/:id               Update a problem (host only)
-DELETE  /api/rooms/:code/problems/:id               Delete a problem (host only)
-POST    /api/rooms/:code/problems/:id/testcases     Add test case (host only)
-DELETE  /api/rooms/:code/problems/:id/testcases/:tcId  Delete test case (host only)
+GET     /api/rooms/:code/problems                           List problems
+POST    /api/rooms/:code/problems                           Create a problem (host only)
+PUT     /api/rooms/:code/problems/:id                       Update a problem (host only)
+DELETE  /api/rooms/:code/problems/:id                       Delete a problem (host only)
+POST    /api/rooms/:code/problems/:id/testcases             Add test case (host only)
+DELETE  /api/rooms/:code/problems/:id/testcases/:tcId       Delete test case (host only)
 ```
 
 ### Submissions
 
 ```
-POST   /api/submissions                         Submit code for judging (requires roomCode, participantName)
-GET    /api/submissions/:id                     Get verdict and full submission details
-GET    /api/rooms/:code/submissions             All submissions in a room (host only)
-GET    /api/rooms/:code/submissions/:name       All submissions by a participant
+POST  /api/submissions                        Submit code for judging
+GET   /api/submissions/:id                    Get verdict and full submission details
+GET   /api/rooms/:code/submissions            All submissions in a room (host only)
+GET   /api/rooms/:code/submissions/:name      All submissions by a participant
 ```
 
-### Run (sample test)
+### Run
 
 ```
-POST   /api/run    Execute code against sample input (requires roomCode, participantName validation)
+POST  /api/run    Execute code against sample input only (does not affect leaderboard)
 ```
 
 ---
@@ -540,37 +429,34 @@ kicked               { reason? }
 
 ## Code Execution Engine
 
-### Safety Limits (enforced by Docker)
+All compilation and execution happens inside disposable Docker sandbox images. No host compilers are required.
 
-| Limit          | Value                                |
-| -------------- | ------------------------------------ |
-| Time limit     | 2 seconds (configurable per problem) |
-| Memory limit   | 256 MB (configurable per problem)    |
-| Network access | Disabled (`--network none`)          |
-| File system    | Read‑write mount to temp dir only    |
-| Process count  | Max 64 (`--pids-limit=64`)           |
+| Language   | Execution                                             |
+| ---------- | ----------------------------------------------------- |
+| C++        | `g++ -O2 solution.cpp -o solution && ./solution`      |
+| C          | `gcc solution.c -o solution && ./solution`            |
+| Java       | `javac Solution.java && java -Xmx200m -cp . Solution` |
+| Python     | `python3 solution.py`                                 |
+| JavaScript | `node solution.js`                                    |
 
-### Execution Per Language
+### Safety Limits
 
-All compilation and execution happens inside Docker sandbox images that include the necessary compilers (no host tools needed).
+| Limit          | Value                             |
+| -------------- | --------------------------------- |
+| Time limit     | 2s (configurable per problem)     |
+| Memory limit   | 256 MB (configurable per problem) |
+| Network access | Disabled (`--network none`)       |
+| Process count  | Max 64 (`--pids-limit=64`)        |
 
-```
-C++        →  g++ -O2 solution.cpp -o solution && ./solution
-C          →  gcc solution.c -o solution && ./solution
-Java       →  javac Solution.java && java -Xmx200m -cp . Solution
-Python     →  python3 solution.py
-JavaScript →  node solution.js
-```
+### Verdicts
 
-### Verdict Meanings
-
-| Verdict                       | Meaning                       |
-| ----------------------------- | ----------------------------- |
-| **AC** — Accepted             | All test cases passed         |
-| **WA** — Wrong Answer         | Output didn't match expected  |
-| **TLE** — Time Limit Exceeded | Took longer than allowed      |
-| **RE** — Runtime Error        | Code crashed during execution |
-| **CE** — Compilation Error    | Code didn't compile           |
+| Verdict | Meaning                       |
+| ------- | ----------------------------- |
+| AC      | All test cases passed         |
+| WA      | Output didn't match expected  |
+| TLE     | Took longer than the limit    |
+| RE      | Code crashed during execution |
+| CE      | Code didn't compile           |
 
 ---
 
@@ -578,130 +464,75 @@ JavaScript →  node solution.js
 
 ```
 dojo/
-│
-├── frontend/                          # React + TypeScript
-│   ├── public/
-│   └── src/
-│       ├── App.tsx                     # Root with error boundary and routes
-│       ├── main.tsx
-│       ├── index.css                   # Tailwind import
-│       ├── pages/
-│       │   ├── Home.tsx                # Landing page
-│       │   ├── Auth.tsx                # Login + Register (combined)
-│       │   ├── CreateRoom.tsx          # Host creates a new contest
-│       │   ├── JoinRoom.tsx            # Enter name + role + code
-│       │   ├── Room.tsx                # Room wrapper (socket, identity)
-│       │   ├── HostRoom.tsx            # Host dashboard
-│       │   ├── ParticipantRoom.tsx     # Participant coding environment
-│       │   ├── ViewerRoom.tsx          # Observer view
-│       │   └── PostContest.tsx         # Results and code review
-│       ├── components/
-│       │   ├── editor/
-│       │   │   ├── CodeEditor.tsx      # Monaco editor wrapper
-│       │   │   └── LanguageSelect.tsx
-│       │   ├── leaderboard/
-│       │   │   └── Leaderboard.tsx     # Live leaderboard
-│       │   ├── problems/
-│       │   │   ├── AddProblemModal.tsx # Host problem creation
-│       │   │   ├── ProblemList.tsx
-│       │   │   ├── ProblemView.tsx
-│       │   │   └── SubmissionHistory.tsx
-│       │   ├── room/
-│       │   │   ├── LiveFeed.tsx        # Real‑time submission feed
-│       │   │   ├── ParticipantList.tsx  # Room roster with kick
-│       │   │   ├── RoomCodeShare.tsx
-│       │   │   └── RoomHeader.tsx
-│       │   └── timer/
-│       │       └── Timer.tsx           # Countdown timer display
-│       ├── hooks/
-│       │   ├── useSocket.ts
-│       │   ├── useTimer.ts
-│       │   └── useLeaderboard.ts
-│       ├── store/
-│       │   ├── roomStore.ts            # Zustand — room state
-│       │   ├── timerStore.ts
-│       │   └── leaderboardStore.ts
-│       ├── socket/
-│       │   └── socket.ts               # Socket.io client setup
-│       ├── lib/
-│       │   └── api.ts                  # REST client (axios)
-│       └── types/
-│           └── index.ts
-│
-├── backend/                           # Node.js + Express + TypeScript
-│   └── src/
-│       ├── app.ts                      # Express app setup
-│       ├── server.ts                   # HTTP server and socket initialization
-│       ├── config/
-│       │   ├── postgres.ts             # PostgreSQL pool
-│       │   └── redis.ts                # Redis client
-│       ├── controllers/
-│       │   ├── auth.controller.ts
-│       │   ├── problem.controller.ts
-│       │   ├── room.controller.ts
-│       │   ├── run.controller.ts
-│       │   └── submission.controller.ts
-│       ├── middleware/
-│       │   └── auth.middleware.ts
-│       ├── queue/
-│       │   └── verdict.listener.ts     # Redis pub/sub verdict handler
-│       ├── routes/
-│       │   ├── auth.routes.ts
-│       │   ├── problem.routes.ts
-│       │   ├── room.routes.ts
-│       │   ├── run.routes.ts
-│       │   └── submission.routes.ts
-│       ├── services/
-│       │   ├── auth.service.ts
-│       │   ├── leaderboard.service.ts
-│       │   ├── problem.service.ts
-│       │   ├── room.service.ts
-│       │   ├── run.service.ts
-│       │   └── submission.service.ts
-│       ├── socket/
-│       │   ├── index.ts                # Socket.io server setup
-│       │   └── handlers/
-│       │       ├── room.handlers.ts
-│       │       ├── timer.handlers.ts
-│       │       └── proctor.handlers.ts
-│       └── types/
-│           └── index.ts
-│
-├── judge/                             # Go — code execution service
-│   ├── main.go
-│   ├── config/
-│   │   └── config.go
-│   ├── runner/
-│   │   └── runner.go                  # Compiles and runs code inside Docker
-│   └── server/
-│       └── server.go                  # HTTP /run and /submit endpoints
-│
-├── docker/
-│   ├── docker-compose.yml             # Full local stack
-│   └── sandbox/                       # Docker images per language
-│       ├── cpp/Dockerfile
-│       ├── c/Dockerfile
-│       ├── java/Dockerfile
-│       ├── python/Dockerfile
-│       └── javascript/Dockerfile
-│
-├── db/
-│   └── migrations/                    # PostgreSQL migrations
-│       ├── 001_create_users.sql
-│       ├── 002_create_rooms.sql
-│       ├── 003_create_room_hosts.sql
-│       ├── 004_create_problems.sql
-│       ├── 005_create_test_cases.sql
-│       ├── 006_create_submissions.sql
-│       ├── 007_create_submission_results.sql
-│       ├── 008_add_indexes.sql
-│       └── 009_add_cascade_submissions.sql
-│
-├── scripts/
-│   └── build-sandboxes.sh             # Build sandbox Docker images
-│
-├── .gitignore
-└── README.md
+|
++-- frontend/
+|   +-- src/
+|       +-- pages/
+|       |   +-- Home.tsx
+|       |   +-- Auth.tsx
+|       |   +-- CreateRoom.tsx
+|       |   +-- JoinRoom.tsx
+|       |   +-- Room.tsx               # Room wrapper (socket, identity)
+|       |   +-- HostRoom.tsx
+|       |   +-- ParticipantRoom.tsx
+|       |   +-- ViewerRoom.tsx
+|       |   +-- PostContest.tsx
+|       +-- components/
+|       |   +-- editor/                # Monaco editor wrapper, language select
+|       |   +-- leaderboard/           # Live leaderboard
+|       |   +-- problems/              # Problem view, add modal, submission history
+|       |   +-- room/                  # Live feed, participant list, room header
+|       |   +-- timer/                 # Countdown timer display
+|       +-- hooks/
+|       |   +-- useSocket.ts
+|       |   +-- useTimer.ts
+|       |   +-- useLeaderboard.ts
+|       +-- store/                     # Zustand -- room, timer, leaderboard
+|       +-- socket/                    # Socket.io client setup
+|       +-- lib/
+|       |   +-- api.ts                 # REST client (axios)
+|       |   +-- device.ts
+|       +-- types/
+|
++-- backend/
+|   +-- src/
+|       +-- app.ts
+|       +-- server.ts                  # HTTP server and socket initialization
+|       +-- config/
+|       |   +-- postgres.ts
+|       |   +-- redis.ts
+|       +-- controllers/               # auth, problem, room, run, submission
+|       +-- middleware/
+|       |   +-- auth.middleware.ts
+|       +-- queue/
+|       |   +-- submission.queue.ts
+|       |   +-- verdict.listener.ts    # Redis Pub/Sub verdict handler
+|       +-- routes/                    # auth, problem, room, run, submission
+|       +-- services/                  # auth, leaderboard, problem, room, run, submission
+|       +-- socket/
+|       |   +-- index.ts
+|       |   +-- handlers/              # room, timer, proctor handlers
+|       +-- types/
+|
++-- judge/                             # Go
+|   +-- main.go
+|   +-- config/
+|   |   +-- config.go
+|   +-- runner/
+|   |   +-- runner.go                  # Compiles and runs code inside Docker
+|   +-- server/
+|       +-- server.go                  # HTTP /run and /submit endpoints
+|
++-- docker/
+|   +-- docker-compose.yml
+|   +-- sandbox/                       # Dockerfile per language
+|       +-- cpp/ c/ java/ python/ javascript/
+|
++-- db/
+|   +-- migrations/                    # 9 SQL migration files
+|
++-- scripts/
+    +-- build-sandboxes.sh             # Build sandbox Docker images
 ```
 
 ---
@@ -711,8 +542,8 @@ dojo/
 ### Prerequisites
 
 - Docker + Docker Compose
-- Node.js 20+ (for local development of backend/frontend)
-- Go 1.22+ (for local development of judge)
+- Node.js 20+
+- Go 1.22+
 
 ### Clone & Run
 
@@ -731,7 +562,7 @@ cp frontend/.env.example frontend/.env
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-That's it. Docker Compose spins up:
+Docker Compose spins up:
 
 - PostgreSQL on `localhost:5433`
 - Redis on `localhost:6379`
@@ -739,13 +570,13 @@ That's it. Docker Compose spins up:
 - Judge service on `http://localhost:5001`
 - Frontend on `http://localhost:5173`
 
-Database migrations are automatically applied on first run.
+Database migrations are applied automatically on first run.
 
 ---
 
 ## Environment Variables
 
-### Backend (`backend/.env.example`)
+### Backend (`backend/.env`)
 
 ```env
 PORT=4000
@@ -756,20 +587,20 @@ JUDGE_URL=http://judge:5001
 CORS_ORIGIN=http://localhost:5173
 ```
 
-### Frontend (`frontend/.env.example`)
+### Frontend (`frontend/.env`)
 
 ```env
 VITE_API_URL=http://localhost:4000
 VITE_SOCKET_URL=http://localhost:4000
 ```
 
-### Judge (reads from environment)
+### Judge
 
 ```env
 REDIS_URL=redis://redis:6379
 ```
 
-The judge only needs Redis to publish verdicts. It has no PostgreSQL dependency.
+The judge has no PostgreSQL dependency — it only needs Redis to publish verdicts.
 
 ---
 
@@ -777,26 +608,23 @@ The judge only needs Redis to publish verdicts. It has no PostgreSQL dependency.
 
 ### v1.0 — Core (completed)
 
-- [x] Architecture design
 - [x] Database schema with indexes and cascades
 - [x] Auth system (host accounts, JWT)
-- [x] Room creation and join flow (lowercase 6‑char codes)
+- [x] Room creation and join flow
 - [x] Problem and test case management
 - [x] Code execution engine (Docker sandbox with internal compilation)
-- [x] Direct HTTP submission flow (no external queue)
+- [x] Direct HTTP submission flow
 - [x] WebSocket layer (timer, leaderboard, live feed, proctoring)
-- [x] Proctoring (fullscreen enforcement, violation warnings, auto‑kick)
-- [x] Frontend UI (Monaco editor, leaderboard, timer, responsive design)
-- [x] Post‑contest submission review and code audit
-- [x] Recovery of stuck submissions
+- [x] Proctoring (fullscreen enforcement, violation warnings, auto-kick)
+- [x] Frontend UI (Monaco editor, leaderboard, timer)
+- [x] Post-contest submission review and code audit
 
 ### v2.0 — Enhancements
 
-- [ ] Leaderboard freeze + dramatic post‑contest reveal
-- [ ] Per test case result visibility for participants
+- [ ] Leaderboard freeze + post-contest reveal
+- [ ] Per-test-case result visibility for participants
 - [ ] Problem bank (save and reuse problems across rooms)
-- [ ] Post‑contest analytics dashboard
+- [ ] Post-contest analytics dashboard
 - [ ] Plagiarism detection (MOSS integration)
 - [ ] Live code replay for viewers
-- [ ] In‑room chat
-- [ ] Constraint helper in problem creation (dropdowns for bounds)
+- [ ] In-room chat
