@@ -313,10 +313,21 @@ export default function ParticipantRoom({ code, socket }: Props) {
       const reason = (e as CustomEvent).detail as string;
       setKickReason(reason || "You have been removed from the contest.");
       setKickedOut(true);
+
+      Object.keys(localStorage).forEach((key) => {
+        if (
+          key.startsWith(`dojo:v1:${code}:`) ||
+          key.startsWith(`dojo:solved:`)
+        ) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      sessionStorage.removeItem(`room:${code}`);
     };
     window.addEventListener("dojo:kicked", handleKicked);
     return () => window.removeEventListener("dojo:kicked", handleKicked);
-  }, []);
+  }, [code]);
 
   useEffect(() => {
     if (problems.length > 0) {

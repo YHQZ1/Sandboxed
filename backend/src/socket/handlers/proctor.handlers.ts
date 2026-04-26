@@ -31,6 +31,17 @@ export const registerProctorHandlers = (_io: SocketServer, socket: Socket) => {
         const count = results[0][1] as number;
 
         if (count >= MAX_VIOLATIONS) {
+          // get device ID for this participant before removing
+          const deviceId = await redis.hget(
+            `room:${code}:device_ids`,
+            participant,
+          );
+
+          // ban the device so they can't rejoin
+          if (deviceId) {
+            await redis.sadd(`room:${code}:banned_devices`, deviceId);
+          }
+
           await removeParticipant(code, participant);
 
           _io.to(`user:${participant}:${code}`).emit("kicked", {

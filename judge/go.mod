@@ -1,6 +1,6 @@
 module github.com/YHQZ1/dojo/judge
 
-go 1.25.5
+go 1.23
 
 require github.com/redis/go-redis/v9 v9.18.0
 

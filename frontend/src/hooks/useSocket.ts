@@ -10,6 +10,7 @@ import type {
   LeaderboardEntry,
   SubmissionStatus,
 } from "../types";
+import { getDeviceId } from "../lib/device";
 
 interface RoomJoinedData {
   room: Room;
@@ -53,7 +54,7 @@ export const useSocket = (
     const socket = connectSocket();
     const { addFeedItem } = useLeaderboardStore.getState();
 
-    socket.emit("join_room", { roomCode, name, role });
+    socket.emit("join_room", { roomCode, name, role, deviceId: getDeviceId() });
 
     socket.on("room_joined", (data: RoomJoinedData) => {
       setRoom(data.room);
@@ -162,6 +163,23 @@ export const useSocket = (
       );
     });
 
+    socket.on("banned", (data: { message?: string } = {}) => {
+      sessionStorage.removeItem(`room:${roomCode}`);
+      Object.keys(localStorage).forEach((key) => {
+        if (
+          key.startsWith(`dojo:v1:${roomCode}:`) ||
+          key.startsWith(`dojo:solved:`)
+        ) {
+          localStorage.removeItem(key);
+        }
+      });
+      window.dispatchEvent(
+        new CustomEvent("dojo:kicked", {
+          detail: data.message || "You have been banned from this room.",
+        }),
+      );
+    });
+
     return () => {
       socket.off("room_joined");
       socket.off("participant_joined");
@@ -177,6 +195,7 @@ export const useSocket = (
       socket.off("submission_update");
       socket.off("violation_warning");
       socket.off("kicked");
+      socket.off("banned")
 
       sessionStorage.removeItem(`room:${roomCode}`);
       disconnectSocket();

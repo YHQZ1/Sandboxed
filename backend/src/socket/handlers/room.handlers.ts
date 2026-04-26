@@ -18,14 +18,31 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
       roomCode,
       name,
       role,
+      deviceId,
     }: {
       roomCode: string;
       name: string;
       role: "host" | "participant" | "viewer";
+      deviceId?: string;
     }) => {
       try {
         const code = roomCode;
         const room = await getRoomByCode(code);
+
+        if (deviceId && role === "participant") {
+          const banned = await redis.sismember(
+            `room:${code}:banned_devices`,
+            deviceId,
+          );
+          if (banned) {
+            socket.emit("banned", {
+              message: "You have been banned from this room.",
+            });
+            return;
+          }
+          // store device ID mapped to participant name
+          await redis.hset(`room:${code}:device_ids`, name, deviceId);
+        }
 
         socket.join(`room:${code}`);
         if (role === "participant") {
@@ -99,18 +116,14 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
   socket.on(
     "problem_added",
     ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
-      socket
-        .to(`room:${roomCode}`)
-        .emit("problem_added", { problem });
+      socket.to(`room:${roomCode}`).emit("problem_added", { problem });
     },
   );
 
   socket.on(
     "problem_updated",
     ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
-      socket
-        .to(`room:${roomCode}`)
-        .emit("problem_updated", { problem });
+      socket.to(`room:${roomCode}`).emit("problem_updated", { problem });
     },
   );
 
