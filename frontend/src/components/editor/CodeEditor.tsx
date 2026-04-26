@@ -67,7 +67,7 @@ export default function CodeEditor({
           readOnly,
           lineNumbers: "on",
           lineNumbersMinChars: 3,
-          tabSize: 2,
+          tabSize: 4,
           padding: { top: 20, bottom: 20 },
           renderLineHighlight: "all",
           cursorBlinking: "smooth",
