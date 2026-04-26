@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import api from "../../lib/api";
-import { getSocket } from "../../socket/socket";
 import type { Problem } from "../../types";
 
 interface TestCaseRow {
@@ -62,7 +61,6 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
       const problem: Problem = res.data.problem;
       setProblemId(problem.id);
       onAdded(problem);
-      getSocket().emit("problem_added", { roomCode, problem });
       setStep("testcases");
     } catch (err: unknown) {
       setError(

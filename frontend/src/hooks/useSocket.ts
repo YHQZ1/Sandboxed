@@ -3,7 +3,13 @@ import { connectSocket, disconnectSocket, getSocket } from "../socket/socket";
 import { useRoomStore } from "../store/roomStore";
 import { useTimerStore } from "../store/timerStore";
 import { useLeaderboardStore } from "../store/leaderboardStore";
-import type { Room, Problem, Participant, LeaderboardEntry } from "../types";
+import type {
+  Room,
+  Problem,
+  Participant,
+  LeaderboardEntry,
+  SubmissionStatus,
+} from "../types";
 
 interface RoomJoinedData {
   room: Room;
@@ -17,26 +23,12 @@ interface RoomJoinedData {
   };
 }
 
-interface TimerTickData {
-  timeRemaining: number;
-  status: "active" | "paused";
-}
-
-interface LeaderboardUpdateData {
-  leaderboard: LeaderboardEntry[];
-}
-
-interface ProblemEventData {
-  problem: Problem;
-}
-
-interface ViolationWarningData {
-  count: number;
-  max: number;
-}
-
-interface KickedData {
-  reason?: string;
+interface SubmissionUpdateData {
+  submissionId: string;
+  participantName: string;
+  problemTitle: string;
+  status: SubmissionStatus;
+  score: number;
 }
 
 export const useSocket = (
@@ -52,12 +44,14 @@ export const useSocket = (
     removeParticipant,
     addProblem,
     updateProblem,
+    updateRoomStatus,
   } = useRoomStore();
   const { setTimer, setDuration } = useTimerStore();
   const { setLeaderboard } = useLeaderboardStore();
 
   useEffect(() => {
     const socket = connectSocket();
+    const { addFeedItem } = useLeaderboardStore.getState();
 
     socket.emit("join_room", { roomCode, name, role });
 
@@ -77,9 +71,8 @@ export const useSocket = (
     socket.on("participant_joined", (data: Participant) =>
       addParticipant(data),
     );
-
-    socket.on("participant_left", ({ name: leftName }: { name: string }) =>
-      removeParticipant(leftName),
+    socket.on("participant_left", ({ name: n }: { name: string }) =>
+      removeParticipant(n),
     );
 
     socket.on(
@@ -93,19 +86,35 @@ export const useSocket = (
       }) => {
         setDuration(duration);
         setTimer(timeRemaining, "active");
+        updateRoomStatus("active");
       },
     );
 
-    socket.on("timer_tick", ({ timeRemaining, status }: TimerTickData) =>
-      setTimer(timeRemaining, status),
+    socket.on(
+      "timer_tick",
+      ({
+        timeRemaining,
+        status,
+      }: {
+        timeRemaining: number;
+        status: "active" | "paused";
+      }) => setTimer(timeRemaining, status),
     );
 
-    socket.on("timer_paused", ({ timeRemaining }: { timeRemaining: number }) =>
-      setTimer(timeRemaining, "paused"),
+    socket.on(
+      "timer_paused",
+      ({ timeRemaining }: { timeRemaining: number }) => {
+        setTimer(timeRemaining, "paused");
+        updateRoomStatus("paused");
+      },
     );
 
-    socket.on("timer_resumed", ({ timeRemaining }: { timeRemaining: number }) =>
-      setTimer(timeRemaining, "active"),
+    socket.on(
+      "timer_resumed",
+      ({ timeRemaining }: { timeRemaining: number }) => {
+        setTimer(timeRemaining, "active");
+        updateRoomStatus("active");
+      },
     );
 
     socket.on(
@@ -113,28 +122,43 @@ export const useSocket = (
       ({ finalLeaderboard }: { finalLeaderboard: LeaderboardEntry[] }) => {
         setLeaderboard(finalLeaderboard || []);
         setTimer(0, "ended");
+        updateRoomStatus("ended");
       },
     );
 
-    socket.on("leaderboard_update", ({ leaderboard }: LeaderboardUpdateData) =>
-      setLeaderboard(leaderboard || []),
+    socket.on(
+      "leaderboard_update",
+      ({ leaderboard }: { leaderboard: LeaderboardEntry[] }) =>
+        setLeaderboard(leaderboard || []),
     );
 
-    socket.on("problem_added", (data: ProblemEventData) =>
-      addProblem(data.problem),
-    );
-    socket.on("problem_updated", (data: ProblemEventData) =>
-      updateProblem(data.problem),
+    socket.on("problem_added", ({ problem }: { problem: Problem }) => {
+      addProblem(problem);
+    });
+
+    socket.on("problem_updated", ({ problem }: { problem: Problem }) =>
+      updateProblem(problem),
     );
 
-    socket.on("violation_warning", (data: ViolationWarningData) => {
+    socket.on("submission_update", (data: SubmissionUpdateData) => {
+      addFeedItem({
+        id: data.submissionId,
+        participantName: data.participantName,
+        problemTitle: data.problemTitle,
+        status: data.status,
+        score: data.score,
+        timestamp: new Date(),
+      });
+    });
+
+    socket.on("violation_warning", (data: { count: number; max: number }) => {
       window.dispatchEvent(new CustomEvent("dojo:warning", { detail: data }));
     });
 
-    socket.on("kicked", (data: KickedData = {}) => {
+    socket.on("kicked", (data: { reason?: string } = {}) => {
       sessionStorage.removeItem(`room:${roomCode}`);
       window.dispatchEvent(
-        new CustomEvent("dojo:kicked", { detail: data.reason }),
+        new CustomEvent("dojo:kicked", { detail: data.reason || "" }),
       );
     });
 
@@ -150,6 +174,7 @@ export const useSocket = (
       socket.off("leaderboard_update");
       socket.off("problem_added");
       socket.off("problem_updated");
+      socket.off("submission_update");
       socket.off("violation_warning");
       socket.off("kicked");
 
@@ -170,6 +195,7 @@ export const useSocket = (
     removeParticipant,
     addProblem,
     updateProblem,
+    updateRoomStatus,
   ]);
 
   return getSocket();

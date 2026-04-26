@@ -1,27 +1,5 @@
-import { useEffect, useState } from "react";
-import { Socket } from "socket.io-client";
+import { useLeaderboardStore } from "../../store/leaderboardStore";
 import type { SubmissionStatus } from "../../types";
-
-interface FeedItem {
-  id: string;
-  participantName: string;
-  problemTitle: string;
-  status: SubmissionStatus;
-  score: number;
-  timestamp: Date;
-}
-
-interface SubmissionUpdateData {
-  submissionId: string;
-  participantName: string;
-  problemTitle: string;
-  status: SubmissionStatus;
-  score: number;
-}
-
-interface Props {
-  socket: Socket;
-}
 
 const VERDICT_STYLE: Record<SubmissionStatus, string> = {
   accepted: "text-[#ededed] border border-[#262626] bg-[#171717]",
@@ -44,29 +22,8 @@ const VERDICT_SHORT: Record<SubmissionStatus, string> = {
   queued: "QU",
 };
 
-export default function LiveFeed({ socket }: Props) {
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-
-  useEffect(() => {
-    const handleUpdate = (data: SubmissionUpdateData) => {
-      setFeed((prev) => [
-        {
-          id: data.submissionId,
-          participantName: data.participantName,
-          problemTitle: data.problemTitle,
-          status: data.status,
-          score: data.score,
-          timestamp: new Date(),
-        },
-        ...prev.slice(0, 49),
-      ]);
-    };
-
-    socket.on("submission_update", handleUpdate);
-    return () => {
-      socket.off("submission_update", handleUpdate);
-    };
-  }, [socket]);
+export default function LiveFeed() {
+  const { feed } = useLeaderboardStore();
 
   const fmt = (d: Date) =>
     d.toLocaleTimeString([], {

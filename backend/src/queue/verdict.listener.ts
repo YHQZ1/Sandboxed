@@ -148,6 +148,7 @@ export const startVerdictListener = () => {
         status,
         score,
         timeTaken,
+        problemId,
       });
 
       let problemTitle = "Unknown";
@@ -160,7 +161,6 @@ export const startVerdictListener = () => {
       } catch {
         // leave as "Unknown"
       }
-
       io.to(`room:${roomCode}`).emit("submission_update", {
         submissionId,
         participantName,

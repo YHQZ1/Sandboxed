@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import type { SubmissionStatus, Language } from "../types";
 
@@ -20,7 +21,6 @@ interface SubmissionRecord {
   score: number;
   time_taken: number | null;
   submitted_at: string;
-  code?: string;
 }
 
 interface Problem {
@@ -71,9 +71,14 @@ const LANG_LABEL: Record<Language, string> = {
 export default function PostContest() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const participantName = searchParams.get("name") || "";
+  const isHost = !participantName;
 
   const [problems, setProblems] = useState<Problem[]>([]);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
+  const [myStats, setMyStats] = useState<ParticipantSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(
     null,
@@ -88,43 +93,73 @@ export default function PostContest() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [roomRes, submissionsRes] = await Promise.all([
-        api.get(`/rooms/${code}`),
-        api.get(`/rooms/${code}/submissions`),
+      const [problemsRes, submissionsRes] = await Promise.all([
+        api.get(`/rooms/${code}/problems`),
+        isHost
+          ? api.get(`/rooms/${code}/submissions`)
+          : api.get(`/rooms/${code}/submissions/${participantName}`),
       ]);
 
-      const problemsData: Problem[] = roomRes.data.problems || [];
+      const problemsData: Problem[] = problemsRes.data.problems || [];
       setProblems(problemsData.sort((a, b) => a.order_index - b.order_index));
 
-      const allSubmissions: SubmissionRecord[] =
-        submissionsRes.data.submissions || [];
-      const map = new Map<string, ParticipantSummary>();
+      if (isHost) {
+        const allSubmissions: SubmissionRecord[] =
+          submissionsRes.data.submissions || [];
+        const map = new Map<string, ParticipantSummary>();
 
-      for (const s of allSubmissions) {
-        if (!map.has(s.participant_name)) {
-          map.set(s.participant_name, {
-            name: s.participant_name,
-            score: 0,
-            solvedCount: 0,
+        for (const s of allSubmissions) {
+          if (!map.has(s.participant_name)) {
+            map.set(s.participant_name, {
+              name: s.participant_name,
+              score: 0,
+              solvedCount: 0,
+              submissions: [],
+            });
+          }
+          map.get(s.participant_name)!.submissions.push(s);
+          if (s.status === "accepted") {
+            map.get(s.participant_name)!.score += s.score;
+            map.get(s.participant_name)!.solvedCount += 1;
+          }
+        }
+
+        const sorted = Array.from(map.values()).sort(
+          (a, b) => b.score - a.score,
+        );
+        setParticipants(sorted);
+        if (sorted.length > 0) setSelectedParticipant(sorted[0].name);
+      } else {
+        const mySubmissions: SubmissionRecord[] =
+          submissionsRes.data.submissions || [];
+        const stats: ParticipantSummary = {
+          name: participantName,
+          score: mySubmissions
+            .filter((s) => s.status === "accepted")
+            .reduce((sum, s) => sum + s.score, 0),
+          solvedCount: mySubmissions.filter((s) => s.status === "accepted")
+            .length,
+          submissions: mySubmissions,
+        };
+        setMyStats(stats);
+
+        const leaderboardRes = await api.get(`/rooms/${code}/leaderboard`);
+        const leaderboardData = leaderboardRes.data.leaderboard || [];
+        setParticipants(
+          leaderboardData.map((entry: any) => ({
+            name: entry.name,
+            score: entry.score,
+            solvedCount: entry.solvedCount,
             submissions: [],
-          });
-        }
-        map.get(s.participant_name)!.submissions.push(s);
-        if (s.status === "accepted") {
-          map.get(s.participant_name)!.score += s.score;
-          map.get(s.participant_name)!.solvedCount += 1;
-        }
+          })),
+        );
       }
-
-      const sorted = Array.from(map.values()).sort((a, b) => b.score - a.score);
-      setParticipants(sorted);
-      if (sorted.length > 0) setSelectedParticipant(sorted[0].name);
-    } catch {
-      // Silently handle – results may not be available yet
+    } catch (err) {
+      console.error("PostContest fetch error:", err);
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, isHost, participantName]);
 
   useEffect(() => {
     fetchData();
@@ -138,7 +173,7 @@ export default function PostContest() {
       setSelectedCode({ code: s.code, language: s.language, status: s.status });
     } catch {
       setSelectedCode({
-        code: "Unable to load source code",
+        code: "Unable to load source code.",
         language: "python",
         status: "runtime_error",
       });
@@ -147,9 +182,9 @@ export default function PostContest() {
     }
   };
 
-  const selectedSummary = participants.find(
-    (p) => p.name === selectedParticipant,
-  );
+  const selectedSummary = isHost
+    ? participants.find((p) => p.name === selectedParticipant)
+    : myStats;
 
   const getBestSubmission = (participantName: string, problemId: string) => {
     const p = participants.find((p) => p.name === participantName);
@@ -188,7 +223,7 @@ export default function PostContest() {
           </span>
           <div className="h-4 w-px bg-[#262626]" />
           <span className="text-xs font-medium text-[#737373] uppercase tracking-wide">
-            {code} / Archives
+            {code} / {isHost ? "Archives" : "Results"}
           </span>
         </div>
         <button
@@ -200,7 +235,7 @@ export default function PostContest() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-12 space-y-12">
-        {participants.length === 0 ? (
+        {participants.length === 0 && !myStats ? (
           <div className="text-center py-20">
             <p className="text-lg text-[#404040] mb-2">No results yet</p>
             <p className="text-sm text-[#404040]">
@@ -209,121 +244,175 @@ export default function PostContest() {
           </div>
         ) : (
           <>
-            <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-              {participants.slice(0, 3).map((p, i) => (
-                <div
-                  key={p.name}
-                  className="bg-[#0a0a0a] border border-[#262626] p-6 rounded-sm relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 p-4 text-4xl font-bold text-[#141414] leading-none select-none">
-                    {i + 1}
+            {!isHost && myStats && (
+              <section className="bg-[#0a0a0a] border border-[#262626] rounded-sm p-8">
+                <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-6 block">
+                  Your Result
+                </span>
+                <div className="flex items-center gap-8 flex-wrap">
+                  <div>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-1">
+                      Name
+                    </p>
+                    <p className="text-xl font-medium">{myStats.name}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-4 block">
-                    Ranked Participant
-                  </span>
-                  <h3 className="text-lg font-medium mb-1">{p.name}</h3>
-                  <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-6">
-                    {p.solvedCount} Solved / {p.submissions.length} Tries
-                  </p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-medium tabular-nums">
-                      {p.score}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#404040]">
-                      PT
-                    </span>
+                  <div>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-1">
+                      Score
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-medium tabular-nums">
+                        {myStats.score}
+                      </span>
+                      <span className="text-[10px] font-bold text-[#404040]">
+                        PT
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-1">
+                      Solved
+                    </p>
+                    <p className="text-2xl font-medium tabular-nums">
+                      {myStats.solvedCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-1">
+                      Attempts
+                    </p>
+                    <p className="text-2xl font-medium tabular-nums">
+                      {myStats.submissions.length}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </section>
+              </section>
+            )}
 
-            <section className="bg-[#0a0a0a] border border-[#262626] rounded-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#262626]">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-                  Results Matrix
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#262626]">
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest">
-                        Participant
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center">
-                        Final Score
-                      </th>
-                      {problems.map((p, i) => (
-                        <th
-                          key={p.id}
-                          className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center"
-                        >
-                          {String.fromCharCode(65 + i)}
-                          <span className="block text-[8px] opacity-40 font-normal">
-                            {p.points}P
-                          </span>
+            {isHost && (
+              <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+                {participants.slice(0, 3).map((p, i) => (
+                  <div
+                    key={p.name}
+                    className="bg-[#0a0a0a] border border-[#262626] p-6 rounded-sm relative overflow-hidden cursor-pointer hover:bg-[#0d0d0d] transition-colors"
+                    onClick={() => setSelectedParticipant(p.name)}
+                  >
+                    <div className="absolute top-0 right-0 p-4 text-4xl font-bold text-[#141414] leading-none select-none">
+                      {i + 1}
+                    </div>
+                    <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-4 block">
+                      Ranked Participant
+                    </span>
+                    <h3 className="text-lg font-medium mb-1">{p.name}</h3>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-6">
+                      {p.solvedCount} Solved / {p.submissions.length} Tries
+                    </p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-medium tabular-nums">
+                        {p.score}
+                      </span>
+                      <span className="text-[10px] font-bold text-[#404040]">
+                        PT
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {isHost && (
+              <section className="bg-[#0a0a0a] border border-[#262626] rounded-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-[#262626]">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                    Results Matrix
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#262626]">
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest">
+                          Participant
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#262626]/50">
-                    {participants.map((participant, idx) => (
-                      <tr
-                        key={participant.name}
-                        onClick={() => setSelectedParticipant(participant.name)}
-                        className={`transition-colors cursor-pointer ${
-                          selectedParticipant === participant.name
-                            ? "bg-[#111]"
-                            : "hover:bg-[#0d0d0d]"
-                        }`}
-                      >
-                        <td className="px-4 py-3 flex items-center gap-3">
-                          <span className="text-[10px] font-bold text-[#404040]">
-                            {String(idx + 1).padStart(2, "0")}
-                          </span>
-                          <span className="text-sm font-medium">
-                            {participant.name}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center font-bold tabular-nums text-sm">
-                          {participant.score}
-                        </td>
-                        {problems.map((problem) => {
-                          const best = getBestSubmission(
-                            participant.name,
-                            problem.id,
-                          );
-                          return (
-                            <td
-                              key={problem.id}
-                              className="px-4 py-3 text-center"
-                            >
-                              {best ? (
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${VERDICT_STYLE[best.status]}`}
-                                >
-                                  {VERDICT_SHORT[best.status]}
-                                </span>
-                              ) : (
-                                <span className="text-[#262626]">—</span>
-                              )}
-                            </td>
-                          );
-                        })}
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center">
+                          Final Score
+                        </th>
+                        {problems.map((p, i) => (
+                          <th
+                            key={p.id}
+                            className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center"
+                          >
+                            {String.fromCharCode(65 + i)}
+                            <span className="block text-[8px] opacity-40 font-normal">
+                              {p.points}P
+                            </span>
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                    </thead>
+                    <tbody className="divide-y divide-[#262626]/50">
+                      {participants.map((participant, idx) => (
+                        <tr
+                          key={participant.name}
+                          onClick={() =>
+                            setSelectedParticipant(participant.name)
+                          }
+                          className={`transition-colors cursor-pointer ${
+                            selectedParticipant === participant.name
+                              ? "bg-[#111]"
+                              : "hover:bg-[#0d0d0d]"
+                          }`}
+                        >
+                          <td className="px-4 py-3 flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-[#404040]">
+                              {String(idx + 1).padStart(2, "0")}
+                            </span>
+                            <span className="text-sm font-medium">
+                              {participant.name}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold tabular-nums text-sm">
+                            {participant.score}
+                          </td>
+                          {problems.map((problem) => {
+                            const best = getBestSubmission(
+                              participant.name,
+                              problem.id,
+                            );
+                            return (
+                              <td
+                                key={problem.id}
+                                className="px-4 py-3 text-center"
+                              >
+                                {best ? (
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${VERDICT_STYLE[best.status]}`}
+                                  >
+                                    {VERDICT_SHORT[best.status]}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#262626]">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-                  Submissions / {selectedParticipant}
+                  {isHost
+                    ? `Submissions / ${selectedParticipant || "—"}`
+                    : "Your Submissions"}
                 </span>
                 <div className="bg-[#0a0a0a] border border-[#262626] divide-y divide-[#262626] max-h-[500px] overflow-y-auto">
-                  {selectedSummary?.submissions.length === 0 ? (
+                  {(selectedSummary?.submissions.length ?? 0) === 0 ? (
                     <div className="p-8 text-center text-sm text-[#404040]">
                       No submissions
                     </div>
@@ -331,8 +420,10 @@ export default function PostContest() {
                     selectedSummary?.submissions.map((s) => (
                       <button
                         key={s.id}
-                        onClick={() => handleViewCode(s.id)}
-                        className="w-full flex items-center gap-4 px-4 py-3 hover:bg-[#111] transition-colors text-left"
+                        onClick={() =>
+                          isHost ? handleViewCode(s.id) : undefined
+                        }
+                        className={`w-full flex items-center gap-4 px-4 py-3 transition-colors text-left ${isHost ? "hover:bg-[#111] cursor-pointer" : "cursor-default"}`}
                       >
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border w-10 text-center flex-shrink-0 ${VERDICT_STYLE[s.status]}`}
@@ -345,8 +436,7 @@ export default function PostContest() {
                               ?.title || "Unknown Problem"}
                           </div>
                           <div className="text-[9px] text-[#404040] uppercase font-bold mt-0.5">
-                            {LANG_LABEL[s.language]} &middot;{" "}
-                            {s.time_taken || 0}ms
+                            {LANG_LABEL[s.language]} · {s.time_taken || 0}ms
                           </div>
                         </div>
                         <span className="text-[10px] font-medium tabular-nums text-[#404040] flex-shrink-0">
@@ -358,38 +448,40 @@ export default function PostContest() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-                  Source Review
-                </span>
-                {selectedCode ? (
-                  <div className="bg-[#0a0a0a] border border-[#262626] p-6 min-h-[400px] max-h-[500px] overflow-y-auto relative">
-                    <div className="flex items-center justify-between mb-4">
-                      <span
-                        className={`text-[10px] font-bold tracking-widest ${VERDICT_STYLE[selectedCode.status]}`}
-                      >
-                        {VERDICT_LABEL[selectedCode.status]}
-                      </span>
-                      <span className="text-[10px] font-bold text-[#737373] uppercase">
-                        {LANG_LABEL[selectedCode.language]}
-                      </span>
-                    </div>
-                    {loadingCode ? (
-                      <div className="flex items-center justify-center py-20">
-                        <div className="w-6 h-6 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin" />
+              {isHost && (
+                <div className="space-y-4">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                    Source Review
+                  </span>
+                  {selectedCode ? (
+                    <div className="bg-[#0a0a0a] border border-[#262626] p-6 min-h-[400px] max-h-[500px] overflow-y-auto">
+                      <div className="flex items-center justify-between mb-4">
+                        <span
+                          className={`text-[10px] font-bold tracking-widest border px-2 py-0.5 rounded-sm ${VERDICT_STYLE[selectedCode.status]}`}
+                        >
+                          {VERDICT_LABEL[selectedCode.status]}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#737373] uppercase">
+                          {LANG_LABEL[selectedCode.language]}
+                        </span>
                       </div>
-                    ) : (
-                      <pre className="text-xs font-mono text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
-                        {selectedCode.code}
-                      </pre>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-48 border border-dashed border-[#262626] rounded-sm text-sm text-[#404040]">
-                    Select a submission to view source code
-                  </div>
-                )}
-              </div>
+                      {loadingCode ? (
+                        <div className="flex items-center justify-center py-20">
+                          <div className="w-6 h-6 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <pre className="text-xs font-mono text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
+                          {selectedCode.code}
+                        </pre>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-48 border border-dashed border-[#262626] rounded-sm text-sm text-[#404040]">
+                      Select a submission to view source code
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           </>
         )}

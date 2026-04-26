@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -33,6 +34,7 @@ interface VerdictData {
   score: number;
   timeTaken?: number;
   memoryUsed?: number;
+  problemId?: string;
 }
 
 const DEFAULT_CODE: Record<Language, string> = {
@@ -124,7 +126,8 @@ const ICONS = {
 export default function ParticipantRoom({ code, socket }: Props) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { problems, myRole, myName } = useRoomStore();
+  const { problems, myRole, myName, solvedProblemIds, markProblemSolved } =
+    useRoomStore();
   const { status: timerStatus } = useTimerStore();
 
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(
@@ -136,7 +139,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
   const [running, setRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [lastVerdict, setLastVerdict] = useState<VerdictData | null>(null);
+  const [verdicts, setVerdicts] = useState<Map<string, VerdictData>>(new Map());
   const [activeTab, setActiveTab] = useState<SideTab>(() => {
     const param = searchParams.get("tab");
     return (
@@ -148,6 +151,8 @@ export default function ParticipantRoom({ code, socket }: Props) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [violations, setViolations] = useState(0);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [testEnded, setTestEnded] = useState(false);
+  const [showEndTestConfirm, setShowEndTestConfirm] = useState(false);
 
   const selectedProblem =
     problems.find((p) => p.id === selectedProblemId) || null;
@@ -183,7 +188,11 @@ export default function ParticipantRoom({ code, socket }: Props) {
       setIsFullscreen(!!document.fullscreenElement);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && timerStatus === "active") {
+      if (
+        document.visibilityState === "hidden" &&
+        timerStatus === "active" &&
+        !testEnded
+      ) {
         socket.emit("proctor_violation", {
           roomCode: code,
           type: "TAB_SWITCH",
@@ -193,7 +202,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
     };
 
     const handleBlur = () => {
-      if (timerStatus === "active") {
+      if (timerStatus === "active" && !testEnded) {
         socket.emit("proctor_violation", {
           roomCode: code,
           type: "WINDOW_BLUR",
@@ -211,7 +220,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [timerStatus, code, myName, socket]);
+  }, [timerStatus, testEnded, code, myName, socket]);
 
   useEffect(() => {
     const handleWarning = (e: Event) => {
@@ -227,19 +236,26 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
   useEffect(() => {
     const handleVerdict = (data: VerdictData) => {
-      setLastVerdict({
-        status: data.status,
-        score: data.score,
-        timeTaken: data.timeTaken,
-        memoryUsed: data.memoryUsed,
+      const problemId = data.problemId || selectedProblemId;
+      if (!problemId) return;
+      setVerdicts((prev) => {
+        const next = new Map(prev);
+        next.set(problemId, {
+          status: data.status,
+          score: data.score,
+          timeTaken: data.timeTaken,
+          memoryUsed: data.memoryUsed,
+        });
+        return next;
       });
+      if (data.status === "accepted") markProblemSolved(problemId);
       setSubmitting(false);
     };
     socket.on("verdict", handleVerdict);
     return () => {
       socket.off("verdict", handleVerdict);
     };
-  }, [socket]);
+  }, [socket, selectedProblemId, markProblemSolved]);
 
   useEffect(() => {
     if (problems.length > 0 && !selectedProblemId) {
@@ -256,6 +272,15 @@ export default function ParticipantRoom({ code, socket }: Props) {
     window.addEventListener("dojo:kicked", handleKicked);
     return () => window.removeEventListener("dojo:kicked", handleKicked);
   }, []);
+
+  useEffect(() => {
+    if (problems.length > 0) {
+      problems.forEach((p) => {
+        if (localStorage.getItem(`dojo:solved:${p.id}`))
+          markProblemSolved(p.id);
+      });
+    }
+  }, [problems]);
 
   const enterFullscreen = useCallback(() => {
     document.documentElement.requestFullscreen().catch(() => {});
@@ -297,9 +322,13 @@ export default function ParticipantRoom({ code, socket }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!selectedProblemId || !code_ || submitting) return;
+    if (!selectedProblemId || !code_ || submitting || testEnded) return;
     setSubmitting(true);
-    setLastVerdict(null);
+    setVerdicts((prev) => {
+      const next = new Map(prev);
+      next.delete(selectedProblemId);
+      return next;
+    });
     try {
       await api.post("/submissions", {
         roomCode: code,
@@ -313,6 +342,13 @@ export default function ParticipantRoom({ code, socket }: Props) {
     }
   };
 
+  const handleEndTest = () => {
+    setTestEnded(true);
+    setShowEndTestConfirm(false);
+    sessionStorage.removeItem(`room:${code}`);
+    if (document.fullscreenElement) document.exitFullscreen();
+  };
+
   const handleLeave = () => {
     socket.emit("leave_room", { roomCode: code });
     sessionStorage.removeItem(`room:${code}`);
@@ -320,7 +356,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
     navigate("/");
   };
 
-  if (timerStatus === "active" && !isFullscreen) {
+  if (timerStatus === "active" && !isFullscreen && !testEnded) {
     return (
       <div className="fixed inset-0 bg-[#050505] z-[100] flex flex-col items-center justify-center space-y-8 p-6">
         <div className="text-center space-y-3">
@@ -350,9 +386,22 @@ export default function ParticipantRoom({ code, socket }: Props) {
     );
   }
 
+  const currentVerdict = selectedProblemId
+    ? (verdicts.get(selectedProblemId) ?? null)
+    : null;
+
   return (
     <div className="h-screen bg-[#0a0a0a] text-[#ededed] flex flex-col overflow-hidden selection:bg-[#262626]">
       <RoomHeader />
+
+      {testEnded && (
+        <div className="h-10 bg-[#171717] border-b border-[#262626] flex items-center justify-center flex-shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#737373]">
+            Test ended — your submissions have been saved
+          </span>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden min-h-0">
         <aside className="w-14 border-r border-[#262626] flex flex-col items-center py-4 gap-1 flex-shrink-0">
           {Object.entries(ICONS).map(([key, icon]) => (
@@ -369,6 +418,26 @@ export default function ParticipantRoom({ code, socket }: Props) {
               {icon}
             </button>
           ))}
+
+          {!testEnded && timerStatus === "active" && (
+            <button
+              onClick={() => setShowEndTestConfirm(true)}
+              title="End my test"
+              className="mt-2 w-10 h-10 flex items-center justify-center rounded-sm text-[#525252] hover:text-[#8BA888] hover:bg-[#0a1a0a] transition-all"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  strokeWidth={2}
+                />
+              </svg>
+            </button>
+          )}
 
           <button
             onClick={() => setShowLeaveConfirm(true)}
@@ -398,6 +467,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
               <ProblemList
                 problems={problems}
                 selectedId={selectedProblemId}
+                solvedIds={solvedProblemIds}
                 onSelect={setSelectedProblemId}
               />
             )}
@@ -429,16 +499,16 @@ export default function ParticipantRoom({ code, socket }: Props) {
             <div className="h-12 flex items-center justify-between px-4 lg:px-6 border-b border-[#262626]">
               <LanguageSelect value={language} onChange={setLanguage} />
               <div className="flex items-center gap-4">
-                {lastVerdict && (
+                {currentVerdict && (
                   <div className="flex items-center gap-2 py-1 px-3 bg-[#111] border border-[#262626] rounded-sm">
                     <span
-                      className={`text-[10px] font-bold tracking-widest ${VERDICT_COLOR[lastVerdict.status]}`}
+                      className={`text-[10px] font-bold tracking-widest ${VERDICT_COLOR[currentVerdict.status]}`}
                     >
-                      {VERDICT_LABEL[lastVerdict.status]}
+                      {VERDICT_LABEL[currentVerdict.status]}
                     </span>
-                    {lastVerdict.status === "accepted" && (
+                    {currentVerdict.status === "accepted" && (
                       <span className="text-[10px] font-bold text-[#ededed] opacity-40">
-                        +{lastVerdict.score}PT
+                        +{currentVerdict.score}PT
                       </span>
                     )}
                   </div>
@@ -446,14 +516,16 @@ export default function ParticipantRoom({ code, socket }: Props) {
                 <div className="flex gap-3">
                   <button
                     onClick={handleRun}
-                    disabled={running || timerStatus !== "active"}
+                    disabled={running || timerStatus !== "active" || testEnded}
                     className="text-[10px] font-bold uppercase tracking-widest text-[#737373] hover:text-[#ededed] transition-colors disabled:opacity-20"
                   >
                     Run Tests
                   </button>
                   <button
                     onClick={handleSubmit}
-                    disabled={submitting || timerStatus !== "active"}
+                    disabled={
+                      submitting || timerStatus !== "active" || testEnded
+                    }
                     className="px-5 py-2 bg-[#ededed] text-[#0a0a0a] text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-all disabled:opacity-30"
                   >
                     Submit Code
@@ -467,7 +539,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
                 language={language}
                 value={code_}
                 onChange={setCode}
-                readOnly={timerStatus !== "active"}
+                readOnly={timerStatus !== "active" || testEnded}
               />
             </div>
 
@@ -552,6 +624,34 @@ export default function ParticipantRoom({ code, socket }: Props) {
             >
               Exit to Home
             </button>
+          </div>
+        </div>
+      )}
+
+      {showEndTestConfirm && (
+        <div className="fixed inset-0 bg-[#0a0a0a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0a0a0a] border border-[#262626] rounded-sm p-8 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-medium tracking-tight text-[#f5f5f5] mb-2">
+              End your test?
+            </h3>
+            <p className="text-sm text-[#a3a3a3] leading-relaxed mb-8">
+              You won't be able to make any more submissions. Your current score
+              will be final.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEndTestConfirm(false)}
+                className="flex-1 py-2.5 text-sm font-medium bg-transparent border border-[#262626] text-[#ededed] rounded-sm hover:bg-[#171717] transition-colors"
+              >
+                Keep Going
+              </button>
+              <button
+                onClick={handleEndTest}
+                className="flex-1 py-2.5 text-sm font-medium bg-[#ededed] text-[#0a0a0a] rounded-sm hover:bg-white transition-colors"
+              >
+                End Test
+              </button>
+            </div>
           </div>
         </div>
       )}

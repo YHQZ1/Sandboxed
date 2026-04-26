@@ -1,9 +1,11 @@
 import { Response } from "express";
+import { getIO } from "../socket";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { verifyRoomHost, getRoomByCode } from "../services/room.service";
 import {
   createProblem,
   getProblems,
+  getProblemById,
   getPublicProblems,
   updateProblem,
   deleteProblem,
@@ -76,6 +78,7 @@ export const create = async (
       time_limit,
       memory_limit,
     });
+    getIO().to(`room:${code}`).emit("problem_added", { problem });
     res.status(201).json({ problem });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "Room not found") {
@@ -165,6 +168,12 @@ export const addTC = async (req: AuthRequest, res: Response): Promise<void> => {
       expected_output,
       is_sample ?? false,
     );
+
+    const updatedProblem = await getProblemById(id);
+    getIO()
+      .to(`room:${code}`)
+      .emit("problem_updated", { problem: updatedProblem });
+
     res.status(201).json({ testCase });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "Room not found") {

@@ -336,7 +336,7 @@ export default function HostRoom({ code, socket }: Props) {
         {activeTab === "feed" && (
           <div className="flex-1 overflow-y-auto p-6 lg:p-10">
             <div className="max-w-3xl mx-auto w-full">
-              <LiveFeed socket={socket} />
+              <LiveFeed />
             </div>
           </div>
         )}

@@ -100,7 +100,7 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
     "problem_added",
     ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
       socket
-        .to(`room:${roomCode.toUpperCase()}`)
+        .to(`room:${roomCode}`)
         .emit("problem_added", { problem });
     },
   );
@@ -109,7 +109,7 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
     "problem_updated",
     ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
       socket
-        .to(`room:${roomCode.toUpperCase()}`)
+        .to(`room:${roomCode}`)
         .emit("problem_updated", { problem });
     },
   );

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import redis from "../config/redis";
 import { AuthRequest } from "../middleware/auth.middleware";
 import {
   createRoom,
@@ -132,6 +133,20 @@ export const kick = async (req: AuthRequest, res: Response): Promise<void> => {
       res.status(404).json({ error: err.message });
       return;
     }
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getLeaderboard = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { code } = req.params;
+  try {
+    const raw = await redis.zrevrange(`room:${code}:leaderboard`, 0, -1);
+    const leaderboard = raw.map((entry) => JSON.parse(entry as string));
+    res.json({ leaderboard });
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 };

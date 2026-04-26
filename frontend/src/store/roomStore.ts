@@ -8,7 +8,9 @@ interface RoomStore {
   submissions: Submission[];
   myName: string;
   myRole: "host" | "participant" | "viewer" | null;
+  solvedProblemIds: Set<string>;
   setRoom: (room: Room) => void;
+  updateRoomStatus: (status: "waiting" | "active" | "paused" | "ended") => void;
   setProblems: (problems: Problem[]) => void;
   setSubmissions: (submissions: Submission[]) => void;
   addProblem: (problem: Problem) => void;
@@ -20,6 +22,7 @@ interface RoomStore {
     name: string,
     role: "host" | "participant" | "viewer",
   ) => void;
+  markProblemSolved: (problemId: string) => void;
   reset: () => void;
 }
 
@@ -30,8 +33,11 @@ export const useRoomStore = create<RoomStore>((set) => ({
   submissions: [],
   myName: "",
   myRole: null,
+  solvedProblemIds: new Set<string>(),
 
   setRoom: (room) => set({ room }),
+  updateRoomStatus: (status) =>
+    set((s) => ({ room: s.room ? { ...s.room, status } : null })),
   setProblems: (problems) => set({ problems }),
   setSubmissions: (submissions) => set({ submissions }),
   addProblem: (problem) => set((s) => ({ problems: [...s.problems, problem] })),
@@ -52,6 +58,13 @@ export const useRoomStore = create<RoomStore>((set) => ({
       participants: s.participants.filter((p) => p.name !== name),
     })),
   setMyIdentity: (name, role) => set({ myName: name, myRole: role }),
+  markProblemSolved: (problemId) =>
+    set((s) => {
+      const updated = new Set(s.solvedProblemIds);
+      updated.add(problemId);
+      localStorage.setItem(`dojo:solved:${problemId}`, "1");
+      return { solvedProblemIds: updated };
+    }),
   reset: () =>
     set({
       room: null,
@@ -60,5 +73,6 @@ export const useRoomStore = create<RoomStore>((set) => ({
       submissions: [],
       myName: "",
       myRole: null,
+      solvedProblemIds: new Set(),
     }),
 }));

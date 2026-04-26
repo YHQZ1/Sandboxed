@@ -193,7 +193,7 @@ func buildContainerRunCmd(language string) []string {
 	case "c":
 		return []string{"sh", "-c", "gcc solution.c -o solution && ./solution"}
 	case "java":
-		return []string{"sh", "-c", "javac Solution.java && java -Xmx200m -cp . Solution"}
+		return []string{"sh", "-c", "cd /code && javac Solution.java && java -Xmx200m Solution"}
 	}
 	return nil
 }
