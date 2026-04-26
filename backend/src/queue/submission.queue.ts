@@ -1,3 +1,4 @@
+import { Queue } from "bullmq";
 import redis from "../config/redis";
 
 export interface SubmissionJob {
@@ -16,6 +17,20 @@ export interface SubmissionJob {
   }>;
 }
 
-export const enqueueSubmission = async (job: SubmissionJob) => {
-  await redis.lpush("queue:submissions", JSON.stringify(job));
+const submissionQueue = new Queue<SubmissionJob>("submissions", {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 2000 },
+    removeOnComplete: 100,
+    removeOnFail: 200,
+  },
+});
+
+export const enqueueSubmission = async (job: SubmissionJob): Promise<void> => {
+  await submissionQueue.add("judge", job, {
+    jobId: job.submissionId,
+  });
 };
+
+export default submissionQueue;

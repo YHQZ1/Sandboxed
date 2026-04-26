@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"os"
 	"os/signal"
@@ -10,8 +9,6 @@ import (
 
 	"github.com/YHQZ1/dojo/judge/config"
 	"github.com/YHQZ1/dojo/judge/server"
-	"github.com/YHQZ1/dojo/judge/worker"
-	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,28 +27,18 @@ func main() {
 	}
 	log.Println("Connected to Redis")
 
-	db, err := sql.Open("postgres", cfg.PostgresURL)
-	if err != nil {
-		log.Fatalf("Postgres open failed: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Postgres ping failed: %v", err)
-	}
-	log.Println("Connected to PostgreSQL")
+	srv := server.New(redisClient, "5001")
 
-	go server.Start("5001")
-
-	w := worker.New(redisClient, db)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	go w.Start(ctx)
+	go func() {
+		if err := srv.Start(); err != nil {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down judge...")
-	cancel()
+	srv.Shutdown(context.Background())
 }

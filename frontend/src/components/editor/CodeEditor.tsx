@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import Editor from "@monaco-editor/react";
+import Editor, { type Monaco } from "@monaco-editor/react";
 import type { Language } from "../../types";
 
 const MONACO_LANG: Record<Language, string> = {
@@ -17,31 +16,31 @@ interface Props {
   readOnly?: boolean;
 }
 
+const defineTheme = (monaco: Monaco) => {
+  monaco.editor.defineTheme("dojo-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#0a0a0a",
+      "editor.foreground": "#ededed",
+      "editorLineNumber.foreground": "#404040",
+      "editorLineNumber.activeForeground": "#ededed",
+      "editor.lineHighlightBackground": "#171717",
+      "editorCursor.foreground": "#ededed",
+      "editor.selectionBackground": "#262626",
+      "editorIndentGuide.background": "#171717",
+      "editorIndentGuide.activeBackground": "#262626",
+    },
+  });
+};
+
 export default function CodeEditor({
   language,
   value,
   onChange,
   readOnly,
 }: Props) {
-  const handleEditorWillMount = (monaco: any) => {
-    monaco.editor.defineTheme("dojo-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [],
-      colors: {
-        "editor.background": "#0a0a0a", // Matches your main background
-        "editor.foreground": "#ededed",
-        "editorLineNumber.foreground": "#404040",
-        "editorLineNumber.activeForeground": "#ededed",
-        "editor.lineHighlightBackground": "#171717",
-        "editorCursor.foreground": "#ededed",
-        "editor.selectionBackground": "#262626",
-        "editorIndentGuide.background": "#171717",
-        "editorIndentGuide.activeBackground": "#262626",
-      },
-    });
-  };
-
   return (
     <div className="h-full w-full border border-[#262626] rounded-sm overflow-hidden">
       <Editor
@@ -49,8 +48,7 @@ export default function CodeEditor({
         language={MONACO_LANG[language]}
         value={value}
         theme="dojo-dark"
-        onMount={(_editor, monaco) => handleEditorWillMount(monaco)}
-        beforeMount={handleEditorWillMount}
+        beforeMount={defineTheme}
         onChange={(v) => onChange(v || "")}
         options={{
           fontSize: 13,
@@ -72,8 +70,6 @@ export default function CodeEditor({
           scrollbar: {
             verticalScrollbarSize: 6,
             horizontalScrollbarSize: 6,
-            vertical: "visible",
-            horizontal: "visible",
           },
           overviewRulerBorder: false,
           hideCursorInOverviewRuler: true,

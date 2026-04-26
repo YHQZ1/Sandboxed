@@ -1,9 +1,34 @@
+# Dependencies
 node_modules/
 vendor/
+
+# Environment files
 .env
+*.env
+!.env.example
+
+# Build output
 dist/
 build/
 *.o
 *.out
+
+# Go compiled binary
+judge/judge
+
+# IDE / OS
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
 *.log
+npm-debug.log*
+
+# Docker
+docker-compose.override.yml
+
+# Sandbox images (built separately)
+# Keep Dockerfiles but ignore any cached layers

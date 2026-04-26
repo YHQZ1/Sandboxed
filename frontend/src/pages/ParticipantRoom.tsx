@@ -1,7 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Socket } from "socket.io-client";
 import { useRoomStore } from "../store/roomStore";
 import { useTimerStore } from "../store/timerStore";
@@ -27,6 +26,13 @@ interface RunResult {
   actual: string;
   passed: boolean;
   error: string;
+}
+
+interface VerdictData {
+  status: SubmissionStatus;
+  score: number;
+  timeTaken?: number;
+  memoryUsed?: number;
 }
 
 const DEFAULT_CODE: Record<Language, string> = {
@@ -59,8 +65,65 @@ const VERDICT_LABEL: Record<SubmissionStatus, string> = {
 
 type SideTab = "problems" | "leaderboard" | "participants" | "submissions";
 
+const VALID_TABS: SideTab[] = [
+  "problems",
+  "leaderboard",
+  "participants",
+  "submissions",
+];
+
+const ICONS = {
+  problems: (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path d="M4 6h16M4 12h16M4 18h7" strokeWidth={2} />
+    </svg>
+  ),
+  leaderboard: (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        strokeWidth={2}
+      />
+    </svg>
+  ),
+  participants: (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+        strokeWidth={2}
+      />
+    </svg>
+  ),
+  submissions: (
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2} />
+    </svg>
+  ),
+};
+
 export default function ParticipantRoom({ code, socket }: Props) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { problems, myRole, myName } = useRoomStore();
   const { status: timerStatus } = useTimerStore();
 
@@ -73,15 +136,26 @@ export default function ParticipantRoom({ code, socket }: Props) {
   const [running, setRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [lastVerdict, setLastVerdict] = useState<{
-    status: SubmissionStatus;
-    score: number;
-    time?: number;
-    memory?: number;
-  } | null>(null);
-  const [activeTab, setActiveTab] = useState<SideTab>("problems");
+  const [lastVerdict, setLastVerdict] = useState<VerdictData | null>(null);
+  const [activeTab, setActiveTab] = useState<SideTab>(() => {
+    const param = searchParams.get("tab");
+    return (
+      param && VALID_TABS.includes(param as SideTab) ? param : "problems"
+    ) as SideTab;
+  });
   const [kickedOut, setKickedOut] = useState(false);
+  const [kickReason, setKickReason] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [violations, setViolations] = useState(0);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  const selectedProblem =
+    problems.find((p) => p.id === selectedProblemId) || null;
+
+  const handleTabChange = (tab: SideTab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     if (selectedProblemId) {
@@ -140,17 +214,30 @@ export default function ParticipantRoom({ code, socket }: Props) {
   }, [timerStatus, code, myName, socket]);
 
   useEffect(() => {
-    socket.on("verdict", (data: any) => {
+    const handleWarning = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        count: number;
+        max: number;
+      };
+      setViolations(detail.count);
+    };
+    window.addEventListener("dojo:warning", handleWarning);
+    return () => window.removeEventListener("dojo:warning", handleWarning);
+  }, []);
+
+  useEffect(() => {
+    const handleVerdict = (data: VerdictData) => {
       setLastVerdict({
         status: data.status,
         score: data.score,
-        time: data.time_taken,
-        memory: data.memory_used,
+        timeTaken: data.timeTaken,
+        memoryUsed: data.memoryUsed,
       });
       setSubmitting(false);
-    });
+    };
+    socket.on("verdict", handleVerdict);
     return () => {
-      socket.off("verdict");
+      socket.off("verdict", handleVerdict);
     };
   }, [socket]);
 
@@ -161,19 +248,20 @@ export default function ParticipantRoom({ code, socket }: Props) {
   }, [problems, selectedProblemId]);
 
   useEffect(() => {
-    const handleKicked = () => setKickedOut(true);
+    const handleKicked = (e: Event) => {
+      const reason = (e as CustomEvent).detail as string;
+      setKickReason(reason || "You have been removed from the contest.");
+      setKickedOut(true);
+    };
     window.addEventListener("dojo:kicked", handleKicked);
     return () => window.removeEventListener("dojo:kicked", handleKicked);
   }, []);
 
-  const enterFullscreen = () => {
+  const enterFullscreen = useCallback(() => {
     document.documentElement.requestFullscreen().catch(() => {});
-  };
-
-  const handleLanguageChange = (lang: Language) => setLanguage(lang);
+  }, []);
 
   const handleRun = async () => {
-    const selectedProblem = problems.find((p) => p.id === selectedProblemId);
     if (!selectedProblem || !code_ || running) return;
     setRunning(true);
     setShowOutput(true);
@@ -188,6 +276,8 @@ export default function ParticipantRoom({ code, socket }: Props) {
             input: tc.input,
             timeLimit: selectedProblem.time_limit || 5,
             memoryLimit: selectedProblem.memory_limit || 256,
+            roomCode: code,
+            participantName: myName,
           });
           return {
             input: tc.input,
@@ -230,27 +320,29 @@ export default function ParticipantRoom({ code, socket }: Props) {
     navigate("/");
   };
 
-  const selectedProblem =
-    problems.find((p) => p.id === selectedProblemId) || null;
-
   if (timerStatus === "active" && !isFullscreen) {
     return (
-      <div className="fixed inset-0 bg-[#050505] z-[100] flex flex-col items-center justify-center space-y-8 p-6 selection:bg-transparent">
+      <div className="fixed inset-0 bg-[#050505] z-[100] flex flex-col items-center justify-center space-y-8 p-6">
         <div className="text-center space-y-3">
           <span className="text-[10px] font-bold text-[#ef4444] uppercase tracking-[0.4em] block">
-            Security_Protocol_Active
+            Fullscreen Required
           </span>
           <h2 className="text-2xl font-medium tracking-tight text-[#f5f5f5]">
-            Lockdown Mode Required
+            Enter Fullscreen Mode
           </h2>
           <p className="text-xs text-[#404040] max-w-xs mx-auto leading-relaxed">
-            External navigation, tab switching, and window focus loss are
-            strictly monitored during this session.
+            Tab switching and window focus loss are monitored. Violations may
+            result in removal.
           </p>
+          {violations > 0 && (
+            <p className="text-xs text-[#ef4444] mt-2">
+              Warnings: {violations} / 4
+            </p>
+          )}
         </div>
         <button
           onClick={enterFullscreen}
-          className="px-10 py-3.5 bg-[#ededed] text-[#050505] text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-all shadow-xl shadow-white/5"
+          className="px-10 py-3.5 bg-[#ededed] text-[#050505] text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-all"
         >
           Enter Fullscreen
         </button>
@@ -259,84 +351,29 @@ export default function ParticipantRoom({ code, socket }: Props) {
   }
 
   return (
-    <div className="h-screen bg-[#050505] text-[#ededed] flex flex-col overflow-hidden selection:bg-[#262626]">
+    <div className="h-screen bg-[#0a0a0a] text-[#ededed] flex flex-col overflow-hidden selection:bg-[#262626]">
       <RoomHeader />
-      <div className="flex-1 flex overflow-hidden">
-        <aside className="w-14 border-r border-[#141414] flex flex-col items-center py-6 gap-8 bg-[#050505] z-20 flex-shrink-0">
-          {[
-            {
-              key: "problems",
-              icon: (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path d="M4 6h16M4 12h16M4 18h7" strokeWidth={2} />
-                </svg>
-              ),
-            },
-            {
-              key: "leaderboard",
-              icon: (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    strokeWidth={2}
-                  />
-                </svg>
-              ),
-            },
-            {
-              key: "participants",
-              icon: (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                    strokeWidth={2}
-                  />
-                </svg>
-              ),
-            },
-            {
-              key: "submissions",
-              icon: (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    strokeWidth={2}
-                  />
-                </svg>
-              ),
-            },
-          ].map((tab) => (
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        <aside className="w-14 border-r border-[#262626] flex flex-col items-center py-4 gap-1 flex-shrink-0">
+          {Object.entries(ICONS).map(([key, icon]) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as SideTab)}
-              className={`p-2 transition-all ${activeTab === tab.key ? "text-[#ededed]" : "text-[#333] hover:text-[#737373]"}`}
+              key={key}
+              onClick={() => handleTabChange(key as SideTab)}
+              title={key.charAt(0).toUpperCase() + key.slice(1)}
+              className={`relative w-10 h-10 flex items-center justify-center rounded-sm transition-all
+                ${activeTab === key ? "bg-[#171717] text-[#ededed]" : "text-[#525252] hover:text-[#a3a3a3] hover:bg-[#111111]"}`}
             >
-              {tab.icon}
+              {activeTab === key && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[#ededed] rounded-r-full -ml-px" />
+              )}
+              {icon}
             </button>
           ))}
+
           <button
-            onClick={handleLeave}
-            className="mt-auto mb-4 p-2 text-[#333] hover:text-[#ef4444] transition-colors"
+            onClick={() => setShowLeaveConfirm(true)}
+            title="Leave room"
+            className="mt-auto w-10 h-10 flex items-center justify-center rounded-sm text-[#525252] hover:text-[#ef4444] hover:bg-[#1a0a0a] transition-all"
           >
             <svg
               className="w-5 h-5"
@@ -352,11 +389,11 @@ export default function ParticipantRoom({ code, socket }: Props) {
           </button>
         </aside>
 
-        <div className="w-72 border-r border-[#141414] bg-[#080808] flex flex-col p-6 gap-6 flex-shrink-0">
+        <div className="w-64 lg:w-72 border-r border-[#262626] flex flex-col p-6 gap-6 flex-shrink-0">
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#404040]">
             {activeTab}
           </span>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {activeTab === "problems" && (
               <ProblemList
                 problems={problems}
@@ -377,26 +414,23 @@ export default function ParticipantRoom({ code, socket }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 flex bg-[#0a0a0a]">
-          <div className="w-[42%] overflow-y-auto p-12 bg-[#080808]/50">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+          <div className="lg:w-[42%] overflow-y-auto p-6 lg:p-10 border-b lg:border-b-0 lg:border-r border-[#262626] min-h-0">
             {selectedProblem ? (
               <ProblemView problem={selectedProblem} />
             ) : (
-              <div className="h-full flex items-center justify-center text-[10px] text-[#333]">
-                AWAITING_CHALLENGE
+              <div className="flex items-center justify-center min-h-[60vh] text-sm text-[#404040]">
+                Select a problem to begin
               </div>
             )}
           </div>
 
-          <div className="flex-1 flex flex-col border-l border-[#141414]">
-            <div className="h-14 flex items-center justify-between px-8 bg-[#050505]/50 backdrop-blur-md z-10">
-              <LanguageSelect
-                value={language}
-                onChange={handleLanguageChange}
-              />
-              <div className="flex items-center gap-8">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="h-12 flex items-center justify-between px-4 lg:px-6 border-b border-[#262626]">
+              <LanguageSelect value={language} onChange={setLanguage} />
+              <div className="flex items-center gap-4">
                 {lastVerdict && (
-                  <div className="flex items-center gap-4 py-1 px-3 bg-[#111] border border-[#1a1a1a] rounded-sm">
+                  <div className="flex items-center gap-2 py-1 px-3 bg-[#111] border border-[#262626] rounded-sm">
                     <span
                       className={`text-[10px] font-bold tracking-widest ${VERDICT_COLOR[lastVerdict.status]}`}
                     >
@@ -409,26 +443,26 @@ export default function ParticipantRoom({ code, socket }: Props) {
                     )}
                   </div>
                 )}
-                <div className="flex gap-4">
+                <div className="flex gap-3">
                   <button
                     onClick={handleRun}
                     disabled={running || timerStatus !== "active"}
-                    className="text-[10px] font-bold uppercase tracking-widest text-[#737373] hover:text-[#ededed] transition-colors disabled:opacity-10"
+                    className="text-[10px] font-bold uppercase tracking-widest text-[#737373] hover:text-[#ededed] transition-colors disabled:opacity-20"
                   >
-                    Run_Tests
+                    Run Tests
                   </button>
                   <button
                     onClick={handleSubmit}
                     disabled={submitting || timerStatus !== "active"}
-                    className="px-6 py-2 bg-[#ededed] text-[#050505] text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-all disabled:opacity-30"
+                    className="px-5 py-2 bg-[#ededed] text-[#0a0a0a] text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-all disabled:opacity-30"
                   >
-                    Submit_Code
+                    Submit Code
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1">
+            <div className="flex-1 min-h-0">
               <CodeEditor
                 language={language}
                 value={code_}
@@ -438,54 +472,54 @@ export default function ParticipantRoom({ code, socket }: Props) {
             </div>
 
             {showOutput && (
-              <div className="h-[35%] bg-[#050505] border-t border-[#141414] flex flex-col">
-                <div className="px-8 py-3 flex items-center justify-between border-b border-[#141414]">
+              <div className="h-[35%] border-t border-[#262626] flex flex-col min-h-0">
+                <div className="px-6 py-3 flex items-center justify-between border-b border-[#262626]">
                   <span className="text-[9px] font-bold tracking-[0.3em] text-[#404040]">
-                    CONSOLE_REPORTS
+                    Run Output
                   </span>
                   <button
                     onClick={() => setShowOutput(false)}
-                    className="text-[#404040] hover:text-[#ededed] text-lg"
+                    className="text-[#404040] hover:text-[#ededed] text-lg leading-none"
                   >
                     &times;
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   {running ? (
                     <div className="text-[10px] text-[#404040] animate-pulse">
-                      SYSTEM_EXECUTING...
+                      Executing...
                     </div>
                   ) : (
                     runResults.map((res, i) => (
-                      <div key={i} className="space-y-4">
-                        <div className="flex items-center gap-3">
+                      <div key={i} className="space-y-3">
+                        <div className="flex items-center gap-2">
                           <div
                             className={`w-1.5 h-1.5 rounded-full ${res.passed ? "bg-[#8BA888]" : "bg-[#C27373]"}`}
                           />
                           <span
                             className={`text-[10px] font-bold uppercase tracking-widest ${res.passed ? "text-[#8BA888]" : "text-[#C27373]"}`}
                           >
-                            CASE_{i + 1}: {res.passed ? "SUCCESS" : "FAILURE"}
+                            Case {i + 1}: {res.passed ? "Passed" : "Failed"}
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           {[
-                            { l: "In", v: res.input },
-                            { l: "Exp", v: res.expected },
+                            { label: "Input", value: res.input },
+                            { label: "Expected", value: res.expected },
                             {
-                              l: "Act",
-                              v: res.error || res.actual,
-                              e: !!res.error,
+                              label: "Actual",
+                              value: res.error || res.actual,
+                              isError: !!res.error,
                             },
-                          ].map((x) => (
-                            <div key={x.l}>
-                              <span className="text-[9px] font-bold text-[#333] uppercase mb-2 block">
-                                {x.l}
+                          ].map(({ label, value, isError }) => (
+                            <div key={label}>
+                              <span className="text-[9px] font-bold text-[#404040] uppercase mb-1 block">
+                                {label}
                               </span>
                               <pre
-                                className={`p-3 bg-[#080808] border border-[#141414] text-[11px] rounded-sm overflow-x-auto ${x.e ? "text-[#C27373]" : "text-[#737373]"}`}
+                                className={`p-3 bg-[#0a0a0a] border border-[#262626] text-[11px] rounded-sm overflow-x-auto ${isError ? "text-[#C27373]" : "text-[#737373]"}`}
                               >
-                                {x.v || "null"}
+                                {value || "—"}
                               </pre>
                             </div>
                           ))}
@@ -502,19 +536,50 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
       {kickedOut && (
         <div className="fixed inset-0 bg-[#0a0a0a]/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-10 max-w-sm w-full text-center space-y-6 shadow-2xl">
-            <span className="text-[10px] font-bold text-[#C27373] uppercase tracking-[0.3em]">
+          <div className="bg-[#0a0a0a] border border-[#262626] p-10 max-w-sm w-full text-center space-y-6">
+            <span className="text-[10px] font-bold text-[#ef4444] uppercase tracking-[0.3em]">
               Disconnected
             </span>
             <h2 className="text-xl font-medium text-[#f5f5f5]">
               Session Terminated
             </h2>
+            {kickReason && (
+              <p className="text-sm text-[#737373]">{kickReason}</p>
+            )}
             <button
               onClick={() => navigate("/")}
-              className="w-full py-3 text-[10px] font-bold uppercase tracking-widest bg-[#ef4444] text-[#0a0a0a] hover:bg-[#f87171] transition-colors rounded-sm"
+              className="w-full py-3 text-[10px] font-bold uppercase tracking-widest bg-[#ededed] text-[#0a0a0a] hover:bg-white transition-all rounded-sm"
             >
-              Exit to Dashboard
+              Exit to Home
             </button>
+          </div>
+        </div>
+      )}
+
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-[#0a0a0a]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0a0a0a] border border-[#262626] rounded-sm p-8 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-medium tracking-tight text-[#f5f5f5] mb-2">
+              Leave contest?
+            </h3>
+            <p className="text-sm text-[#a3a3a3] leading-relaxed mb-8">
+              Your progress will be saved but you won't be able to rejoin once
+              you leave.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-2.5 text-sm font-medium bg-transparent border border-[#262626] text-[#ededed] rounded-sm hover:bg-[#171717] transition-colors"
+              >
+                Stay
+              </button>
+              <button
+                onClick={handleLeave}
+                className="flex-1 py-2.5 text-sm font-medium bg-[#ef4444] text-white rounded-sm hover:bg-[#dc2626] transition-colors"
+              >
+                Leave
+              </button>
+            </div>
           </div>
         </div>
       )}

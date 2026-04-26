@@ -21,7 +21,12 @@ export default function Room() {
     if (rawState) return rawState;
 
     const saved = sessionStorage.getItem(`room:${code}`);
-    return saved ? JSON.parse(saved) : null;
+    return saved
+      ? (JSON.parse(saved) as {
+          name: string;
+          role: "host" | "participant" | "viewer";
+        })
+      : null;
   }, [location.state, code]);
 
   useEffect(() => {
@@ -42,15 +47,22 @@ export default function Room() {
 
   if (!state?.name) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center font-sans">
-        <p className="text-[#737373] text-sm animate-pulse">Redirecting...</p>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="space-y-4 text-center">
+          <div className="w-8 h-8 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-[#737373]">Loading room...</p>
+        </div>
       </div>
     );
   }
 
-  if (state.role === "host") return <HostRoom code={code!} socket={socket} />;
-  if (state.role === "participant")
+  if (state.role === "host") {
+    return <HostRoom code={code!} socket={socket} />;
+  }
+
+  if (state.role === "participant") {
     return <ParticipantRoom code={code!} socket={socket} />;
+  }
 
   return <ViewerRoom code={code!} />;
 }

@@ -15,11 +15,11 @@ export const list = async (req: AuthRequest, res: Response): Promise<void> => {
   const { code } = req.params;
 
   try {
-    const room = await getRoomByCode(code.toUpperCase());
+    const room = await getRoomByCode(code);
 
     let problems;
     if (req.user) {
-      const isHost = await verifyRoomHost(code.toUpperCase(), req.user.userId);
+      const isHost = await verifyRoomHost(code, req.user.userId);
       problems = isHost
         ? await getProblems(room.id)
         : await getPublicProblems(room.id);
@@ -28,12 +28,11 @@ export const list = async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     res.json({ problems });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("List problems error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -60,8 +59,8 @@ export const create = async (
   }
 
   try {
-    const room = await getRoomByCode(code.toUpperCase());
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const room = await getRoomByCode(code);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can add problems" });
       return;
@@ -78,12 +77,11 @@ export const create = async (
       memory_limit,
     });
     res.status(201).json({ problem });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Create problem error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -95,7 +93,7 @@ export const update = async (
   const { code, id } = req.params;
 
   try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can update problems" });
       return;
@@ -103,19 +101,20 @@ export const update = async (
 
     const problem = await updateProblem(id, req.body);
     res.json({ problem });
-  } catch (err: any) {
-    if (
-      err.message === "Problem not found" ||
-      err.message === "Room not found"
-    ) {
-      res.status(404).json({ error: err.message });
-      return;
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      if (
+        err.message === "Problem not found" ||
+        err.message === "Room not found"
+      ) {
+        res.status(404).json({ error: err.message });
+        return;
+      }
+      if (err.message === "Nothing to update") {
+        res.status(400).json({ error: err.message });
+        return;
+      }
     }
-    if (err.message === "Nothing to update") {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    console.error("Update problem error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -127,7 +126,7 @@ export const remove = async (
   const { code, id } = req.params;
 
   try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can delete problems" });
       return;
@@ -135,12 +134,11 @@ export const remove = async (
 
     await deleteProblem(id);
     res.json({ message: "Problem deleted" });
-  } catch (err: any) {
-    if (err.message === "Problem not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Problem not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Delete problem error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -155,7 +153,7 @@ export const addTC = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 
   try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can add test cases" });
       return;
@@ -168,12 +166,11 @@ export const addTC = async (req: AuthRequest, res: Response): Promise<void> => {
       is_sample ?? false,
     );
     res.status(201).json({ testCase });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Add test case error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -185,7 +182,7 @@ export const removeTC = async (
   const { code, tcId } = req.params;
 
   try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can delete test cases" });
       return;
@@ -193,12 +190,11 @@ export const removeTC = async (
 
     await deleteTestCase(tcId);
     res.json({ message: "Test case deleted" });
-  } catch (err: any) {
-    if (err.message === "Test case not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Test case not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Delete test case error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };

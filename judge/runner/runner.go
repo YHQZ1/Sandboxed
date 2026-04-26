@@ -36,21 +36,8 @@ func RunSubmission(
 	}
 	defer os.RemoveAll(dir)
 
-	srcFile, err := writeSourceFile(dir, language, code)
-	if err != nil {
+	if _, err := writeSourceFile(dir, language, code); err != nil {
 		return nil, fmt.Errorf("failed to write source: %w", err)
-	}
-
-	if err := compile(dir, language, srcFile); err != nil {
-		results := make([]TestCaseResult, len(testCases))
-		for i, tc := range testCases {
-			results[i] = TestCaseResult{
-				TestCaseID:   tc.ID,
-				Status:       "compilation_error",
-				ActualOutput: err.Error(),
-			}
-		}
-		return results, nil
 	}
 
 	results := make([]TestCaseResult, 0, len(testCases))
@@ -60,6 +47,29 @@ func RunSubmission(
 	}
 
 	return results, nil
+}
+
+func RunDirect(language string, code string, input string, timeLimit int, memoryLimit int) (string, string, error) {
+	dir, err := os.MkdirTemp("", "dojo-run-*")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	if _, err := writeSourceFile(dir, language, code); err != nil {
+		return "", "", err
+	}
+
+	result := runInDocker(dir, language, input, "", "direct", timeLimit, memoryLimit)
+
+	if result.Status == "runtime_error" {
+		return "", result.ActualOutput, nil
+	}
+	if result.Status == "tle" {
+		return "", "Time limit exceeded", nil
+	}
+
+	return result.ActualOutput, "", nil
 }
 
 func writeSourceFile(dir, language, code string) (string, error) {
@@ -78,58 +88,8 @@ func writeSourceFile(dir, language, code string) (string, error) {
 	return path, os.WriteFile(path, []byte(code), 0644)
 }
 
-func compile(dir, language, srcFile string) error {
-	var cmd *exec.Cmd
-	switch language {
-	case "cpp":
-		cmd = exec.Command("g++", srcFile, "-o", filepath.Join(dir, "solution"), "-O2")
-	case "c":
-		cmd = exec.Command("gcc", srcFile, "-o", filepath.Join(dir, "solution"))
-	case "java":
-		cmd = exec.Command("javac", srcFile)
-	default:
-		return nil
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s", stderr.String())
-	}
-	return nil
-}
-
-func RunDirect(language string, code string, input string, timeLimit int, memoryLimit int) (string, string, error) {
-	dir, err := os.MkdirTemp("", "dojo-run-*")
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	defer os.RemoveAll(dir)
-
-	srcFile, err := writeSourceFile(dir, language, code)
-	if err != nil {
-		return "", "", err
-	}
-
-	if err := compile(dir, language, srcFile); err != nil {
-		return "", err.Error(), nil
-	}
-
-	result := runInDocker(dir, language, input, "", "direct", timeLimit, memoryLimit)
-
-	if result.Status == "runtime_error" {
-		return "", result.ActualOutput, nil
-	}
-	if result.Status == "tle" {
-		return "", "Time limit exceeded", nil
-	}
-
-	return result.ActualOutput, "", nil
-}
-
 func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLimit, memoryLimit int) TestCaseResult {
 	image := dockerImage(language)
-
 	runCmd := buildContainerRunCmd(language)
 
 	args := []string{
@@ -139,7 +99,7 @@ func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLi
 		fmt.Sprintf("--memory-swap=%dm", memoryLimit),
 		"--cpus=1",
 		"--pids-limit=64",
-		"-v", fmt.Sprintf("%s:/code:ro", dir),
+		"-v", fmt.Sprintf("%s:/code", dir), // read-write mount
 		"--workdir", "/code",
 		"-i",
 		image,
@@ -180,11 +140,21 @@ func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLi
 				TimeTaken:  elapsed,
 			}
 		}
+		// compilation error or runtime error; stderr holds details
+		exitMsg := stderr.String()
+		if strings.Contains(exitMsg, "error:") || strings.Contains(exitMsg, "cannot find symbol") {
+			return TestCaseResult{
+				TestCaseID:   testCaseID,
+				Status:       "compilation_error",
+				TimeTaken:    elapsed,
+				ActualOutput: exitMsg,
+			}
+		}
 		return TestCaseResult{
 			TestCaseID:   testCaseID,
 			Status:       "runtime_error",
 			TimeTaken:    elapsed,
-			ActualOutput: stderr.String(),
+			ActualOutput: exitMsg,
 		}
 	}
 
@@ -203,11 +173,11 @@ func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLi
 
 func dockerImage(language string) string {
 	images := map[string]string{
-		"python":     "python:3.12-alpine",
-		"javascript": "node:20-alpine",
-		"cpp":        "alpine:3.19",
-		"c":          "alpine:3.19",
-		"java":       "eclipse-temurin:21-jre-alpine",
+		"python":     "dojo-sandbox-python:latest",
+		"javascript": "dojo-sandbox-javascript:latest",
+		"cpp":        "dojo-sandbox-cpp:latest",
+		"c":          "dojo-sandbox-c:latest",
+		"java":       "dojo-sandbox-java:latest",
 	}
 	return images[language]
 }
@@ -218,10 +188,12 @@ func buildContainerRunCmd(language string) []string {
 		return []string{"python3", "solution.py"}
 	case "javascript":
 		return []string{"node", "solution.js"}
-	case "cpp", "c":
-		return []string{"./solution"}
+	case "cpp":
+		return []string{"sh", "-c", "g++ -O2 solution.cpp -o solution && ./solution"}
+	case "c":
+		return []string{"sh", "-c", "gcc solution.c -o solution && ./solution"}
 	case "java":
-		return []string{"java", "-Xmx200m", "-cp", ".", "Solution"}
+		return []string{"sh", "-c", "javac Solution.java && java -Xmx200m -cp . Solution"}
 	}
 	return nil
 }

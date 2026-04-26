@@ -2,6 +2,14 @@ import { Server as SocketServer, Socket } from "socket.io";
 import redis from "../../config/redis";
 import { getRoomByCode } from "../../services/room.service";
 import { getProblems, getPublicProblems } from "../../services/problem.service";
+import { Problem } from "../../types";
+
+interface LeaderboardEntry {
+  name: string;
+  score: number;
+  solvedCount: number;
+  lastAcceptedAt: string | null;
+}
 
 export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
   socket.on(
@@ -16,11 +24,10 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
       role: "host" | "participant" | "viewer";
     }) => {
       try {
-        const code = roomCode.toUpperCase();
+        const code = roomCode;
         const room = await getRoomByCode(code);
 
         socket.join(`room:${code}`);
-
         if (role === "participant") {
           socket.join(`user:${name}:${code}`);
         }
@@ -43,14 +50,13 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
         const participants = Object.entries(participantsRaw || {}).map(
           ([n, v]) => ({
             name: n,
-            ...JSON.parse(v as string),
+            ...(JSON.parse(v as string) as { role: string; joinedAt: string }),
           }),
         );
 
-        const leaderboard: any[] = [];
+        const leaderboard: LeaderboardEntry[] = [];
         for (let i = 0; i < leaderboardRaw.length; i += 2) {
-          const entry = JSON.parse(leaderboardRaw[i]);
-          leaderboard.push(entry);
+          leaderboard.push(JSON.parse(leaderboardRaw[i]) as LeaderboardEntry);
         }
 
         const problems =
@@ -68,14 +74,13 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
 
         socket.to(`room:${code}`).emit("participant_joined", { name, role });
       } catch (err) {
-        console.error("join_room error:", err);
         socket.emit("error", { message: "Failed to join room" });
       }
     },
   );
 
   socket.on("leave_room", ({ roomCode }: { roomCode: string }) => {
-    const code = roomCode.toUpperCase();
+    const code = roomCode;
     socket.leave(`room:${code}`);
     if (socket.data.name) {
       io.to(`room:${code}`).emit("participant_left", {
@@ -93,7 +98,7 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
 
   socket.on(
     "problem_added",
-    ({ roomCode, problem }: { roomCode: string; problem: any }) => {
+    ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
       socket
         .to(`room:${roomCode.toUpperCase()}`)
         .emit("problem_added", { problem });
@@ -102,7 +107,7 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
 
   socket.on(
     "problem_updated",
-    ({ roomCode, problem }: { roomCode: string; problem: any }) => {
+    ({ roomCode, problem }: { roomCode: string; problem: Problem }) => {
       socket
         .to(`room:${roomCode.toUpperCase()}`)
         .emit("problem_updated", { problem });
@@ -112,10 +117,8 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
   socket.on(
     "kick_participant",
     async ({ roomCode, name }: { roomCode: string; name: string }) => {
-      const code = roomCode.toUpperCase();
-
+      const code = roomCode;
       io.to(`user:${name}:${code}`).emit("kicked");
-
       io.to(`room:${code}`).emit("participant_left", { name });
     },
   );

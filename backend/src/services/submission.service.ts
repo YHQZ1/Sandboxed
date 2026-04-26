@@ -1,7 +1,10 @@
-import pool from "../config/db";
-import { enqueueSubmission } from "../queue/submission.queue";
+import pool from "../config/postgres";
+import redis from "../config/redis";
+import axios from "axios";
 import { getProblemById } from "./problem.service";
 import { getRoomByCode } from "./room.service";
+
+const JUDGE_URL = process.env.JUDGE_URL || "http://localhost:5001";
 
 export const submitCode = async (
   roomCode: string,
@@ -14,6 +17,19 @@ export const submitCode = async (
 
   if (room.status !== "active") {
     throw new Error("Contest is not active");
+  }
+
+  const participant = await redis.hget(
+    `room:${roomCode}:participants`,
+    participantName,
+  );
+  if (!participant) {
+    throw new Error("Participant not found in room");
+  }
+
+  const parsed = JSON.parse(participant) as { role: string };
+  if (parsed.role !== "participant") {
+    throw new Error("Only participants can submit");
   }
 
   const problem = await getProblemById(problemId);
@@ -41,17 +57,28 @@ export const submitCode = async (
     [problemId],
   );
 
-  await enqueueSubmission({
-    submissionId: submission.id,
-    roomCode,
-    problemId,
-    participantName,
-    language,
-    code,
-    timeLimit: problem.time_limit,
-    memoryLimit: problem.memory_limit,
-    testCases: tcResult.rows,
-  });
+  try {
+    await axios.post(
+      `${JUDGE_URL}/submit`,
+      {
+        submissionId: submission.id,
+        roomCode,
+        problemId,
+        participantName,
+        language,
+        code,
+        timeLimit: problem.time_limit,
+        memoryLimit: problem.memory_limit,
+        testCases: tcResult.rows,
+      },
+      { timeout: 5000 },
+    );
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.code === "ECONNREFUSED") {
+      throw new Error("Judge service unavailable");
+    }
+    throw new Error("Failed to send submission to judge");
+  }
 
   return submission;
 };

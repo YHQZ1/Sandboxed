@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import { AuthRequest } from "../middleware/auth.middleware";
 import {
   createRoom,
@@ -7,8 +8,8 @@ import {
   getRoomParticipants,
   removeParticipant,
   verifyRoomHost,
-  getRoomWithProblems,
 } from "../services/room.service";
+import { getPublicProblems, getProblems } from "../services/problem.service";
 
 export const create = async (
   req: AuthRequest,
@@ -24,24 +25,37 @@ export const create = async (
   try {
     const room = await createRoom(req.user!.userId, name, timerDuration);
     res.status(201).json({ room });
-  } catch (err) {
-    console.error("Create room error:", err);
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
-export const getRoom = async (req: Request, res: Response): Promise<void> => {
+export const getRoom = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
   const { code } = req.params;
+
   try {
-    const room = await getRoomWithProblems(code.toUpperCase());
-    const participants = await getRoomParticipants(code.toUpperCase());
-    res.json({ room, participants, problems: room.problems });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+    const room = await getRoomByCode(code);
+    const participants = await getRoomParticipants(code);
+
+    let problems;
+    if (req.user) {
+      const isHost = await verifyRoomHost(code, req.user.userId);
+      problems = isHost
+        ? await getProblems(room.id)
+        : await getPublicProblems(room.id);
+    } else {
+      problems = await getPublicProblems(room.id);
+    }
+
+    res.json({ room, participants, problems });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Get room error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -66,14 +80,13 @@ export const join = async (req: Request, res: Response): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
     try {
-      const jwt = await import("jsonwebtoken");
-      const payload = jwt.default.verify(
+      const payload = jwt.verify(
         authHeader.slice(7),
         process.env.JWT_SECRET as string,
-      ) as any;
+      ) as { userId: string };
       userId = payload.userId;
     } catch {
-      // Token invalid, continue without userId
+      // token invalid, proceed without userId
     }
   }
 
@@ -83,20 +96,21 @@ export const join = async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const data = await joinRoom(code.toUpperCase(), name, role, userId);
+    const data = await joinRoom(code, name, role, userId);
     res.json(data);
-  } catch (err: any) {
-    const clientErrors = [
-      "Room not found",
-      "Contest has ended",
-      "Hosts must be authenticated",
-      "Name already taken in this room",
-    ];
-    if (clientErrors.includes(err.message)) {
-      res.status(400).json({ error: err.message });
-      return;
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      const clientErrors = [
+        "Room not found",
+        "Contest has ended",
+        "Hosts must be authenticated",
+        "Name already taken in this room",
+      ];
+      if (clientErrors.includes(err.message)) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
     }
-    console.error("Join room error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -105,71 +119,19 @@ export const kick = async (req: AuthRequest, res: Response): Promise<void> => {
   const { code, name } = req.params;
 
   try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Only hosts can remove participants" });
       return;
     }
 
-    await removeParticipant(code.toUpperCase(), name);
+    await removeParticipant(code, name);
     res.json({ message: `${name} removed from room` });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Kick error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const timerStart = async (
-  req: AuthRequest,
-  res: Response,
-): Promise<void> => {
-  const { code } = req.params;
-  try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
-    if (!isHost) {
-      res.status(403).json({ error: "Hosts only" });
-      return;
-    }
-    res.json({ message: "Send timer_start via WebSocket" });
-  } catch (err) {
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const timerPause = async (
-  req: AuthRequest,
-  res: Response,
-): Promise<void> => {
-  const { code } = req.params;
-  try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
-    if (!isHost) {
-      res.status(403).json({ error: "Hosts only" });
-      return;
-    }
-    res.json({ message: "Send timer_pause via WebSocket" });
-  } catch (err) {
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const timerResume = async (
-  req: AuthRequest,
-  res: Response,
-): Promise<void> => {
-  const { code } = req.params;
-  try {
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
-    if (!isHost) {
-      res.status(403).json({ error: "Hosts only" });
-      return;
-    }
-    res.json({ message: "Send timer_resume via WebSocket" });
-  } catch (err) {
     res.status(500).json({ error: "Internal server error" });
   }
 };

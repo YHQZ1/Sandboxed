@@ -19,7 +19,7 @@ export default function Timer() {
         : "text-[#ededed]";
 
   return (
-    <div className="flex flex-col items-center justify-center font-sans">
+    <div className="flex flex-col items-center justify-center">
       {status === "waiting" && (
         <span className="text-[11px] font-semibold tracking-wider uppercase text-[#737373]">
           Not started

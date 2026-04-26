@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 import { Socket } from "socket.io-client";
 import type { SubmissionStatus } from "../../types";
@@ -10,6 +9,14 @@ interface FeedItem {
   status: SubmissionStatus;
   score: number;
   timestamp: Date;
+}
+
+interface SubmissionUpdateData {
+  submissionId: string;
+  participantName: string;
+  problemTitle: string;
+  status: SubmissionStatus;
+  score: number;
 }
 
 interface Props {
@@ -27,21 +34,21 @@ const VERDICT_STYLE: Record<SubmissionStatus, string> = {
   queued: "text-[#404040] border border-[#262626]",
 };
 
-const VERDICT_LABEL: Record<SubmissionStatus, string> = {
+const VERDICT_SHORT: Record<SubmissionStatus, string> = {
   accepted: "AC",
   wrong_answer: "WA",
   tle: "TLE",
   runtime_error: "RE",
   compilation_error: "CE",
-  judging: "JUDGE",
-  queued: "QUEUE",
+  judging: "...",
+  queued: "QU",
 };
 
 export default function LiveFeed({ socket }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
 
   useEffect(() => {
-    socket.on("submission_update", (data: any) => {
+    const handleUpdate = (data: SubmissionUpdateData) => {
       setFeed((prev) => [
         {
           id: data.submissionId,
@@ -53,9 +60,11 @@ export default function LiveFeed({ socket }: Props) {
         },
         ...prev.slice(0, 49),
       ]);
-    });
+    };
+
+    socket.on("submission_update", handleUpdate);
     return () => {
-      socket.off("submission_update");
+      socket.off("submission_update", handleUpdate);
     };
   }, [socket]);
 
@@ -68,7 +77,7 @@ export default function LiveFeed({ socket }: Props) {
     });
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a] font-sans">
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-2 px-1">
         <span className="text-sm font-medium text-[#737373] flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-[#ededed] animate-pulse" />
@@ -93,14 +102,16 @@ export default function LiveFeed({ socket }: Props) {
               <span
                 className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm flex-shrink-0 min-w-[45px] text-center ${VERDICT_STYLE[item.status]}`}
               >
-                {VERDICT_LABEL[item.status]}
+                {VERDICT_SHORT[item.status]}
               </span>
 
               <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                 <span className="text-sm font-medium text-[#f5f5f5] truncate">
                   {item.participantName}
                 </span>
-                <span className="hidden sm:inline text-[#404040]">·</span>
+                <span className="hidden sm:inline text-[#404040]">
+                  &middot;
+                </span>
                 <span className="text-sm text-[#737373] truncate">
                   {item.problemTitle}
                 </span>

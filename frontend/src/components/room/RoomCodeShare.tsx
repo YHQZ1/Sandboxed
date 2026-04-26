@@ -14,7 +14,7 @@ export default function RoomCodeShare() {
   };
 
   return (
-    <div className="inline-flex items-center bg-[#171717] border border-[#262626] rounded-sm h-7 font-sans">
+    <div className="inline-flex items-center bg-[#171717] border border-[#262626] rounded-sm h-7">
       <span className="text-[10px] uppercase tracking-wider font-semibold text-[#737373] px-2.5 flex items-center h-full border-r border-[#262626]">
         Code
       </span>

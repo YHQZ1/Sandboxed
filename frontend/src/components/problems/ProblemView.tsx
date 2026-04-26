@@ -6,8 +6,7 @@ interface Props {
 
 export default function ProblemView({ problem }: Props) {
   return (
-    <div className="bg-transparent font-sans selection:bg-[#262626]">
-      {/* Meta Specs Row */}
+    <div className="selection:bg-[#262626]">
       <div className="flex flex-wrap gap-2 mb-8">
         {[
           { label: "Points", value: `${problem.points}` },
@@ -26,14 +25,12 @@ export default function ProblemView({ problem }: Props) {
         ))}
       </div>
 
-      {/* Description */}
       <div className="mb-10">
         <p className="text-[14px] text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
           {problem.description}
         </p>
       </div>
 
-      {/* Sections: Input, Output, Constraints */}
       <div className="space-y-8 mb-10">
         {[
           {
@@ -74,13 +71,11 @@ export default function ProblemView({ problem }: Props) {
           ))}
       </div>
 
-      {/* Sample Test Cases */}
       {problem.test_cases?.filter((tc) => tc.is_sample).length > 0 && (
         <div className="space-y-8 pt-8 border-t border-[#262626]">
           <h3 className="text-[11px] font-bold tracking-widest uppercase text-[#737373]">
             Examples
           </h3>
-
           {problem.test_cases
             ?.filter((tc) => tc.is_sample)
             .map((tc, i) => (
@@ -93,7 +88,7 @@ export default function ProblemView({ problem }: Props) {
                     { label: "Input", value: tc.input },
                     { label: "Output", value: tc.expected_output },
                   ].map(({ label, value }) => (
-                    <div key={label} className="flex flex-col">
+                    <div key={label}>
                       <div className="text-[10px] uppercase font-bold text-[#404040] mb-2 tracking-wide">
                         {label}
                       </div>

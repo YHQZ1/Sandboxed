@@ -120,7 +120,7 @@ export default function PostContest() {
       setParticipants(sorted);
       if (sorted.length > 0) setSelectedParticipant(sorted[0].name);
     } catch {
-      console.error("Failed to load contest data");
+      // Silently handle – results may not be available yet
     } finally {
       setLoading(false);
     }
@@ -138,7 +138,7 @@ export default function PostContest() {
       setSelectedCode({ code: s.code, language: s.language, status: s.status });
     } catch {
       setSelectedCode({
-        code: "Internal storage error",
+        code: "Unable to load source code",
         language: "python",
         status: "runtime_error",
       });
@@ -170,204 +170,229 @@ export default function PostContest() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#404040] animate-pulse">
-          Analysing_Results
-        </span>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="space-y-3 text-center">
+          <div className="w-8 h-8 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-[#737373]">Loading results...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#ededed] font-sans selection:bg-[#262626]">
-      <header className="border-b border-[#141414] px-8 py-4 flex items-center justify-between bg-[#050505]/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="flex items-center gap-6">
-          <span className="text-lg font-medium tracking-tighter text-[#f5f5f5]">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#ededed] selection:bg-[#262626]">
+      <header className="border-b border-[#262626] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-sm z-30">
+        <div className="flex items-center gap-4">
+          <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
             Dojo.
           </span>
-          <div className="h-4 w-px bg-[#1a1a1a]" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#404040]">
+          <div className="h-4 w-px bg-[#262626]" />
+          <span className="text-xs font-medium text-[#737373] uppercase tracking-wide">
             {code} / Archives
           </span>
         </div>
         <button
           onClick={() => navigate("/")}
-          className="text-[10px] font-bold uppercase tracking-widest text-[#737373] hover:text-[#ededed] transition-colors"
+          className="text-sm font-medium text-[#737373] hover:text-[#ededed] transition-colors"
         >
-          Exit_To_Home
+          Back to Home
         </button>
       </header>
 
-      <main className="max-w-7xl mx-auto px-8 py-12 space-y-12">
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {participants.slice(0, 3).map((p, i) => (
-            <div
-              key={p.name}
-              className="bg-[#0a0a0a] border border-[#141414] p-8 rounded-sm relative overflow-hidden group"
-            >
-              <div className="absolute top-0 right-0 p-4 text-[40px] font-bold text-[#141414] leading-none select-none group-hover:text-[#1a1a1a] transition-colors">
-                0{i + 1}
-              </div>
-              <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-4 block">
-                Ranked_Participant
-              </span>
-              <h3 className="text-xl font-medium mb-1">{p.name}</h3>
-              <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-6">
-                {p.solvedCount} Solved / {p.submissions.length} Tries
-              </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-medium tabular-nums">
-                  {p.score}
-                </span>
-                <span className="text-[10px] font-bold text-[#404040]">
-                  PTS
-                </span>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <section className="bg-[#0a0a0a] border border-[#141414] rounded-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#141414] bg-[#050505]">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-              Execution_Matrix
-            </span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-12 space-y-12">
+        {participants.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-lg text-[#404040] mb-2">No results yet</p>
+            <p className="text-sm text-[#404040]">
+              Submissions will appear here after the contest ends.
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#141414]">
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest">
-                    Participant
-                  </th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center">
-                    Final_Score
-                  </th>
-                  {problems.map((p, i) => (
-                    <th
-                      key={p.id}
-                      className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center"
-                    >
-                      {String.fromCharCode(65 + i)}
-                      <span className="block text-[8px] opacity-40 font-normal">
-                        {p.points}P
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#141414]/50">
-                {participants.map((participant, idx) => (
-                  <tr
-                    key={participant.name}
-                    onClick={() => setSelectedParticipant(participant.name)}
-                    className={`transition-colors cursor-pointer ${selectedParticipant === participant.name ? "bg-[#111]" : "hover:bg-[#080808]"}`}
-                  >
-                    <td className="px-6 py-4 flex items-center gap-4">
-                      <span className="text-[10px] font-bold text-[#222]">
-                        {(idx + 1).toString().padStart(2, "0")}
-                      </span>
-                      <span className="text-sm font-medium">
-                        {participant.name}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center font-bold tabular-nums text-sm">
-                      {participant.score}
-                    </td>
-                    {problems.map((problem) => {
-                      const best = getBestSubmission(
-                        participant.name,
-                        problem.id,
-                      );
-                      return (
-                        <td key={problem.id} className="px-6 py-4 text-center">
-                          {best ? (
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${VERDICT_STYLE[best.status]}`}
-                            >
-                              {VERDICT_SHORT[best.status]}
-                            </span>
-                          ) : (
-                            <span className="text-[#1a1a1a]">--</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-                Audit_Logs / {selectedParticipant}
-              </span>
-            </div>
-            <div className="bg-[#0a0a0a] border border-[#141414] divide-y divide-[#141414]">
-              {selectedSummary?.submissions.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => handleViewCode(s.id)}
-                  className="w-full flex items-center gap-6 px-6 py-4 hover:bg-[#111] transition-colors group border-none bg-transparent"
-                >
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border w-10 text-center ${VERDICT_STYLE[s.status]}`}
-                  >
-                    {VERDICT_SHORT[s.status]}
-                  </span>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-[#ededed] group-hover:text-white">
-                      {problems.find((p) => p.id === s.problem_id)?.title}
-                    </div>
-                    <div className="text-[9px] text-[#404040] uppercase font-bold mt-0.5">
-                      {LANG_LABEL[s.language]} • {s.time_taken || 0}ms
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-medium tabular-nums text-[#404040]">
-                    {fmt(s.submitted_at)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {selectedCode ? (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
-                  Source_Review
-                </span>
-                <span className="text-[10px] font-bold text-[#737373] uppercase">
-                  {LANG_LABEL[selectedCode.language]}
-                </span>
-              </div>
-              <div className="bg-[#0a0a0a] border border-[#141414] p-8 min-h-[400px] relative overflow-hidden">
+        ) : (
+          <>
+            <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+              {participants.slice(0, 3).map((p, i) => (
                 <div
-                  className={`absolute top-0 right-0 p-4 text-[10px] font-bold tracking-widest ${VERDICT_STYLE[selectedCode.status]}`}
+                  key={p.name}
+                  className="bg-[#0a0a0a] border border-[#262626] p-6 rounded-sm relative overflow-hidden"
                 >
-                  {VERDICT_LABEL[selectedCode.status]}
+                  <div className="absolute top-0 right-0 p-4 text-4xl font-bold text-[#141414] leading-none select-none">
+                    {i + 1}
+                  </div>
+                  <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-4 block">
+                    Ranked Participant
+                  </span>
+                  <h3 className="text-lg font-medium mb-1">{p.name}</h3>
+                  <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-6">
+                    {p.solvedCount} Solved / {p.submissions.length} Tries
+                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-medium tabular-nums">
+                      {p.score}
+                    </span>
+                    <span className="text-[10px] font-bold text-[#404040]">
+                      PT
+                    </span>
+                  </div>
                 </div>
-                {loadingCode ? (
-                  <div className="h-full flex items-center justify-center text-[10px] text-[#222] animate-pulse">
-                    DECRYPTING...
+              ))}
+            </section>
+
+            <section className="bg-[#0a0a0a] border border-[#262626] rounded-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#262626]">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                  Results Matrix
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#262626]">
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest">
+                        Participant
+                      </th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center">
+                        Final Score
+                      </th>
+                      {problems.map((p, i) => (
+                        <th
+                          key={p.id}
+                          className="px-4 py-3 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center"
+                        >
+                          {String.fromCharCode(65 + i)}
+                          <span className="block text-[8px] opacity-40 font-normal">
+                            {p.points}P
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#262626]/50">
+                    {participants.map((participant, idx) => (
+                      <tr
+                        key={participant.name}
+                        onClick={() => setSelectedParticipant(participant.name)}
+                        className={`transition-colors cursor-pointer ${
+                          selectedParticipant === participant.name
+                            ? "bg-[#111]"
+                            : "hover:bg-[#0d0d0d]"
+                        }`}
+                      >
+                        <td className="px-4 py-3 flex items-center gap-3">
+                          <span className="text-[10px] font-bold text-[#404040]">
+                            {String(idx + 1).padStart(2, "0")}
+                          </span>
+                          <span className="text-sm font-medium">
+                            {participant.name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold tabular-nums text-sm">
+                          {participant.score}
+                        </td>
+                        {problems.map((problem) => {
+                          const best = getBestSubmission(
+                            participant.name,
+                            problem.id,
+                          );
+                          return (
+                            <td
+                              key={problem.id}
+                              className="px-4 py-3 text-center"
+                            >
+                              {best ? (
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${VERDICT_STYLE[best.status]}`}
+                                >
+                                  {VERDICT_SHORT[best.status]}
+                                </span>
+                              ) : (
+                                <span className="text-[#262626]">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                  Submissions / {selectedParticipant}
+                </span>
+                <div className="bg-[#0a0a0a] border border-[#262626] divide-y divide-[#262626] max-h-[500px] overflow-y-auto">
+                  {selectedSummary?.submissions.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-[#404040]">
+                      No submissions
+                    </div>
+                  ) : (
+                    selectedSummary?.submissions.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleViewCode(s.id)}
+                        className="w-full flex items-center gap-4 px-4 py-3 hover:bg-[#111] transition-colors text-left"
+                      >
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border w-10 text-center flex-shrink-0 ${VERDICT_STYLE[s.status]}`}
+                        >
+                          {VERDICT_SHORT[s.status]}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-[#ededed] truncate">
+                            {problems.find((p) => p.id === s.problem_id)
+                              ?.title || "Unknown Problem"}
+                          </div>
+                          <div className="text-[9px] text-[#404040] uppercase font-bold mt-0.5">
+                            {LANG_LABEL[s.language]} &middot;{" "}
+                            {s.time_taken || 0}ms
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-medium tabular-nums text-[#404040] flex-shrink-0">
+                          {fmt(s.submitted_at)}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                  Source Review
+                </span>
+                {selectedCode ? (
+                  <div className="bg-[#0a0a0a] border border-[#262626] p-6 min-h-[400px] max-h-[500px] overflow-y-auto relative">
+                    <div className="flex items-center justify-between mb-4">
+                      <span
+                        className={`text-[10px] font-bold tracking-widest ${VERDICT_STYLE[selectedCode.status]}`}
+                      >
+                        {VERDICT_LABEL[selectedCode.status]}
+                      </span>
+                      <span className="text-[10px] font-bold text-[#737373] uppercase">
+                        {LANG_LABEL[selectedCode.language]}
+                      </span>
+                    </div>
+                    {loadingCode ? (
+                      <div className="flex items-center justify-center py-20">
+                        <div className="w-6 h-6 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin" />
+                      </div>
+                    ) : (
+                      <pre className="text-xs font-mono text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
+                        {selectedCode.code}
+                      </pre>
+                    )}
                   </div>
                 ) : (
-                  <pre className="text-xs font-mono text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
-                    {selectedCode.code}
-                  </pre>
+                  <div className="flex items-center justify-center h-48 border border-dashed border-[#262626] rounded-sm text-sm text-[#404040]">
+                    Select a submission to view source code
+                  </div>
                 )}
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center border border-dashed border-[#1a1a1a] rounded-sm text-[10px] text-[#222] uppercase tracking-widest">
-              Select_A_Log_To_View_Source
-            </div>
-          )}
-        </section>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

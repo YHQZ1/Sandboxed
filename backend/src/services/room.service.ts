@@ -1,22 +1,14 @@
-import pool from "../config/db";
+import pool from "../config/postgres";
 import redis from "../config/redis";
 
 const generateRoomCode = (): string => {
-  const words = [
-    "STORM",
-    "BLAZE",
-    "FROST",
-    "FORGE",
-    "SWIFT",
-    "IRON",
-    "BOLT",
-    "NOVA",
-    "APEX",
-    "FLUX",
-  ];
-  const word = words[Math.floor(Math.random() * words.length)];
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return `${word}-${num}`;
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const length = 6;
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 };
 
 export const createRoom = async (
@@ -43,7 +35,7 @@ export const createRoom = async (
       `INSERT INTO rooms (code, name, created_by, timer_duration)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [code, name, hostUserId, timerDuration || null],
+      [code, name, hostUserId, timerDuration ?? null],
     );
     const room = roomResult.rows[0];
 
@@ -114,9 +106,10 @@ export const joinRoom = async (
   } else {
     const existing = await redis.hget(`room:${code}:participants`, name);
     if (existing) {
-      const parsed = JSON.parse(existing);
-      if (parsed.role !== role)
+      const parsed = JSON.parse(existing) as { role: string };
+      if (parsed.role !== role) {
         throw new Error("Name already taken in this room");
+      }
     }
 
     await redis.hset(
@@ -132,7 +125,7 @@ export const joinRoom = async (
   const participantsRaw = await redis.hgetall(`room:${code}:participants`);
   const participants = Object.entries(participantsRaw || {}).map(([n, v]) => ({
     name: n,
-    ...JSON.parse(v as string),
+    ...(JSON.parse(v as string) as { role: string; joinedAt: string }),
   }));
 
   return { room, participants };
@@ -143,11 +136,14 @@ export const getRoomParticipants = async (code: string) => {
   if (!raw) return [];
   return Object.entries(raw).map(([name, val]) => ({
     name,
-    ...JSON.parse(val as string),
+    ...(JSON.parse(val as string) as { role: string; joinedAt: string }),
   }));
 };
 
-export const removeParticipant = async (code: string, name: string) => {
+export const removeParticipant = async (
+  code: string,
+  name: string,
+): Promise<void> => {
   await redis.hdel(`room:${code}:participants`, name);
 };
 
@@ -172,13 +168,4 @@ export const verifyRoomHost = async (
     [room.id, userId],
   );
   return result.rows.length > 0;
-};
-
-export const getRoomWithProblems = async (code: string) => {
-  const room = await getRoomByCode(code);
-  const result = await pool.query(
-    `SELECT * FROM problems WHERE room_id = $1 ORDER BY order_index`,
-    [room.id],
-  );
-  return { ...room, problems: result.rows };
 };

@@ -13,12 +13,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await registerUser(name, email, password);
     res.status(201).json(data);
-  } catch (err: any) {
-    if (err.message === "Email already registered") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Email already registered") {
       res.status(409).json({ error: err.message });
       return;
     }
-    console.error("Register error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -34,12 +33,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const data = await loginUser(email, password);
     res.json(data);
-  } catch (err: any) {
-    if (err.message === "Invalid credentials") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Invalid credentials") {
       res.status(401).json({ error: err.message });
       return;
     }
-    console.error("Login error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -48,12 +46,11 @@ export const me = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const user = await getUserById(req.user!.userId);
     res.json({ user });
-  } catch (err: any) {
-    if (err.message === "User not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "User not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Me error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -1,43 +1,24 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
+
 import { registerRoomHandlers } from "./handlers/room.handlers";
 import { registerTimerHandlers } from "./handlers/timer.handlers";
-import redis from "../config/redis";
+import { registerProctorHandlers } from "./handlers/proctor.handlers";
 
 let io: SocketServer;
 
 export const initSocket = (httpServer: HttpServer): SocketServer => {
   io = new SocketServer(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: {
+      origin: process.env.CORS_ORIGIN || "*",
+      methods: ["GET", "POST"],
+    },
   });
 
   io.on("connection", (socket: Socket) => {
     registerRoomHandlers(io, socket);
     registerTimerHandlers(io, socket);
-
-    socket.on("disconnect", () => {
-      console.log(`Socket disconnected: ${socket.id}`);
-    });
-  });
-
-  const verdictSub = redis.duplicate();
-  verdictSub.subscribe("pubsub:verdict", (err) => {
-    if (err) console.error("Failed to subscribe to verdicts:", err);
-  });
-
-  verdictSub.on("message", (_channel, message) => {
-    try {
-      const verdict = JSON.parse(message);
-      io.to(`user:${verdict.participantName}:${verdict.roomCode}`).emit(
-        "verdict",
-        verdict,
-      );
-      io.to(`room:${verdict.roomCode}`).emit("leaderboard_update", {
-        leaderboard: verdict.leaderboard,
-      });
-    } catch (err) {
-      console.error("Verdict parse error:", err);
-    }
+    registerProctorHandlers(io, socket);
   });
 
   return io;

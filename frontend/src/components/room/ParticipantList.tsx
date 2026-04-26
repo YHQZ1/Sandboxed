@@ -23,14 +23,13 @@ export default function ParticipantList({ showKick, hostCode, socket }: Props) {
       await api.delete(`/rooms/${hostCode}/participants/${name}`);
       removeParticipant(name);
       socket?.emit("kick_participant", { roomCode: hostCode, name });
-    } catch (err) {
-      console.error("Kick failed:", err);
+    } catch {
+      // silently ignore failure – the UI already updates optimistically
     }
   };
 
   return (
-    <div className="flex flex-col font-sans w-full">
-      {/* Header */}
+    <div className="flex flex-col w-full">
       <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-2">
         <span className="text-sm font-medium text-[#737373]">
           People in room
@@ -40,28 +39,24 @@ export default function ParticipantList({ showKick, hostCode, socket }: Props) {
         </span>
       </div>
 
-      {/* List */}
       <div className="flex flex-col">
         {participants.map((p) => (
           <div
             key={p.name}
             className="flex items-center gap-3 py-3 border-b border-[#262626]/50 last:border-0 hover:bg-[#111111] transition-colors px-3 -mx-3 rounded-sm"
           >
-            {/* Minimal Status Dot */}
             <div className="w-1.5 h-1.5 rounded-full bg-[#ededed] opacity-50 flex-shrink-0" />
 
             <span className="text-sm font-medium text-[#f5f5f5] flex-1 truncate">
               {p.name}
             </span>
 
-            {/* Role Badge */}
             <span
               className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-sm flex-shrink-0 ${ROLE_STYLE[p.role]}`}
             >
               {p.role}
             </span>
 
-            {/* Evident Action Button */}
             {showKick && p.role !== "host" && (
               <button
                 onClick={() => handleKick(p.name)}

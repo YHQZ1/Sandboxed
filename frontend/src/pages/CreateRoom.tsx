@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -16,7 +15,7 @@ export default function CreateRoom() {
     const token = localStorage.getItem("token");
     const storedName = localStorage.getItem("hostName");
     if (!token) {
-      navigate("/login");
+      navigate("/auth?mode=login");
     } else {
       setHostName(storedName || "Host");
     }
@@ -40,8 +39,22 @@ export default function CreateRoom() {
         JSON.stringify({ name: hostName, role: "host" }),
       );
       navigate(`/room/${code}`, { state: { name: hostName, role: "host" } });
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create room.");
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "response" in err &&
+        err.response &&
+        typeof err.response === "object" &&
+        "data" in err.response &&
+        err.response.data &&
+        typeof err.response.data === "object" &&
+        "error" in err.response.data
+      ) {
+        setError(String(err.response.data.error));
+      } else {
+        setError("Failed to create room.");
+      }
     } finally {
       setLoading(false);
     }
@@ -52,9 +65,9 @@ export default function CreateRoom() {
       <div className="max-w-sm w-full flex flex-col">
         <button
           onClick={() => navigate("/")}
-          className="text-sm text-[#737373] hover:text-[#ededed] transition-colors mb-12 self-start flex items-center gap-2"
+          className="text-sm text-[#737373] hover:text-[#ededed] transition-colors mb-12 self-start"
         >
-          ← Back to home
+          Back to home
         </button>
 
         <h1 className="text-3xl font-medium tracking-tight text-[#f5f5f5] mb-2">
@@ -80,7 +93,7 @@ export default function CreateRoom() {
             <label className="text-sm text-[#737373]">Contest Name</label>
             <input
               type="text"
-              placeholder="e.g. Round 1 — Backend"
+              placeholder="e.g. Round 1"
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}

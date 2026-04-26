@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import { getSocket } from "../../socket/socket";
+import type { Problem } from "../../types";
 
 interface TestCaseRow {
   input: string;
@@ -12,7 +13,7 @@ interface TestCaseRow {
 interface Props {
   roomCode: string;
   onClose: () => void;
-  onAdded: (problem: any) => void;
+  onAdded: (problem: Problem) => void;
 }
 
 export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
@@ -32,7 +33,6 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
     { input: "", expected_output: "", is_sample: true },
   ]);
 
-  // Handle Escape key to close modal
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -59,15 +59,17 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
         time_limit: timeLimit,
         memory_limit: memoryLimit,
       });
-      setProblemId(res.data.problem.id);
-      onAdded(res.data.problem);
-      getSocket().emit("problem_added", {
-        roomCode,
-        problem: res.data.problem,
-      });
+      const problem: Problem = res.data.problem;
+      setProblemId(problem.id);
+      onAdded(problem);
+      getSocket().emit("problem_added", { roomCode, problem });
       setStep("testcases");
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create problem.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error && "response" in err
+          ? (err.response as any)?.data?.error || "Failed to create problem."
+          : "Failed to create problem.",
+      );
     } finally {
       setLoading(false);
     }
@@ -90,8 +92,12 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
         );
       }
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to add test cases.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error && "response" in err
+          ? (err.response as any)?.data?.error || "Failed to add test cases."
+          : "Failed to add test cases.",
+      );
     } finally {
       setLoading(false);
     }
@@ -116,22 +122,16 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
     setTestCases((prev) => prev.filter((_, idx) => idx !== i));
 
   const inputClass =
-    "w-full bg-transparent border border-[#262626] rounded-sm px-3 py-2 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm resize-none";
+    "w-full bg-transparent border border-[#262626] rounded-sm px-3 py-2 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm";
   const labelClass = "text-xs font-medium text-[#737373] mb-1.5 block";
 
   return (
     <div className="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#0a0a0a] border border-[#262626] w-full max-w-2xl max-h-[90vh] flex flex-col rounded-sm shadow-2xl">
-        {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] flex-shrink-0">
-          <div>
-            <span className="text-[10px] uppercase tracking-widest font-bold text-[#404040]">
-              {step === "problem" ? "Phase 01 — Details" : "Phase 02 — Data"}
-            </span>
-            <h2 className="text-lg font-medium text-[#f5f5f5]">
-              {step === "problem" ? "Create Challenge" : "Define Test Cases"}
-            </h2>
-          </div>
+          <h2 className="text-lg font-medium text-[#f5f5f5]">
+            {step === "problem" ? "New Problem" : "Test Cases"}
+          </h2>
           <button
             onClick={onClose}
             className="text-xs font-medium text-[#737373] hover:text-[#ededed] transition-colors"
@@ -140,7 +140,6 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
           {error && (
             <div className="bg-[#ef4444]/10 border border-[#ef4444]/20 p-3 rounded-sm">
@@ -151,10 +150,10 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
           {step === "problem" ? (
             <>
               <div>
-                <label className={labelClass}>Challenge Title</label>
+                <label className={labelClass}>Title</label>
                 <input
                   className={inputClass}
-                  placeholder="e.g. Tree Traversal"
+                  placeholder="Problem title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
@@ -163,7 +162,7 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                 <label className={labelClass}>Description</label>
                 <textarea
                   className={inputClass}
-                  placeholder="The problem core statement..."
+                  placeholder="Problem statement..."
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -171,7 +170,7 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Input Specification</label>
+                  <label className={labelClass}>Input Format</label>
                   <textarea
                     className={inputClass}
                     rows={2}
@@ -180,7 +179,7 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Output Specification</label>
+                  <label className={labelClass}>Output Format</label>
                   <textarea
                     className={inputClass}
                     rows={2}
@@ -190,10 +189,10 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                 </div>
               </div>
               <div>
-                <label className={labelClass}>System Constraints</label>
+                <label className={labelClass}>Constraints</label>
                 <input
                   className={inputClass}
-                  placeholder="e.g. N <= 10^5"
+                  placeholder="e.g. 1 <= N <= 10^5"
                   value={constraints}
                   onChange={(e) => setConstraints(e.target.value)}
                 />
@@ -201,8 +200,12 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
               <div className="grid grid-cols-3 gap-4">
                 {[
                   { label: "Points", v: points, set: setPoints },
-                  { label: "Time (s)", v: timeLimit, set: setTimeLimit },
-                  { label: "Memory (MB)", v: memoryLimit, set: setMemoryLimit },
+                  { label: "Time Limit (s)", v: timeLimit, set: setTimeLimit },
+                  {
+                    label: "Memory Limit (MB)",
+                    v: memoryLimit,
+                    set: setMemoryLimit,
+                  },
                 ].map(({ label, v, set }) => (
                   <div key={label}>
                     <label className={labelClass}>{label}</label>
@@ -210,7 +213,7 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                       type="number"
                       className={inputClass}
                       value={v}
-                      onChange={(e) => set(parseInt(e.target.value) || 0)}
+                      onChange={(e) => set(parseInt(e.target.value, 10) || 0)}
                     />
                   </div>
                 ))}
@@ -218,32 +221,30 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
             </>
           ) : (
             <>
-              <p className="text-xs text-[#737373] mb-2">
-                Sample cases are visible to all users. Hidden cases are for
-                final judging only.
+              <p className="text-xs text-[#737373]">
+                Sample test cases are visible to participants. Hidden cases are
+                for final judging.
               </p>
               {testCases.map((tc, i) => (
                 <div
                   key={i}
-                  className="border border-[#262626] p-4 rounded-sm space-y-4"
+                  className="border border-[#262626] p-4 rounded-sm space-y-3"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-[#404040] uppercase">
-                      CASE {i + 1}
+                      Case {i + 1}
                     </span>
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-[11px] text-[#737373] cursor-pointer">
                         <input
                           type="checkbox"
                           checked={tc.is_sample}
                           onChange={(e) =>
                             updateTestCase(i, "is_sample", e.target.checked)
                           }
-                          className="w-3 h-3 accent-[#ededed]"
+                          className="w-3 h-3 rounded-sm border-[#262626] bg-transparent accent-[#ededed]"
                         />
-                        <span className="text-[11px] text-[#737373]">
-                          Visible Sample
-                        </span>
+                        Sample
                       </label>
                       {testCases.length > 1 && (
                         <button
@@ -255,9 +256,9 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                       )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className={labelClass}>Input (stdin)</label>
+                      <label className={labelClass}>Input</label>
                       <textarea
                         className={inputClass}
                         rows={3}
@@ -268,7 +269,7 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Expected (stdout)</label>
+                      <label className={labelClass}>Expected Output</label>
                       <textarea
                         className={inputClass}
                         rows={3}
@@ -283,15 +284,14 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
               ))}
               <button
                 onClick={addTestCaseRow}
-                className="w-full py-3 border border-dashed border-[#262626] text-[11px] font-bold uppercase text-[#737373] hover:border-[#404040] hover:text-[#ededed] transition-colors rounded-sm"
+                className="w-full py-3 border border-dashed border-[#262626] text-xs font-bold uppercase text-[#737373] hover:border-[#404040] hover:text-[#ededed] transition-colors rounded-sm"
               >
-                + Append New Case
+                Add Test Case
               </button>
             </>
           )}
         </div>
 
-        {/* Footer Actions */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#262626] flex-shrink-0">
           <button
             onClick={onClose}
@@ -307,8 +307,8 @@ export default function AddProblemModal({ roomCode, onClose, onAdded }: Props) {
             {loading
               ? "Processing..."
               : step === "problem"
-                ? "Continue →"
-                : "Finalize Problem"}
+                ? "Save Problem"
+                : "Save Test Cases"}
           </button>
         </div>
       </div>

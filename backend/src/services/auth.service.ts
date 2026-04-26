@@ -1,19 +1,20 @@
-import pool from "../config/db";
+import pool from "../config/postgres";
 import bcrypt from "bcrypt";
-import jwt, { SignOptions } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 const generateToken = (userId: string, email: string): string => {
-  const payload = { userId, email };
   const secret = process.env.JWT_SECRET as string;
-  const options: SignOptions = { expiresIn: "7d" };
-  return jwt.sign(payload, secret, options);
+  return jwt.sign({ userId, email }, secret, { expiresIn: "7d" });
 };
 
 export const registerUser = async (
   name: string,
   email: string,
   password: string,
-) => {
+): Promise<{
+  user: { id: string; name: string; email: string; created_at: Date };
+  token: string;
+}> => {
   const existing = await pool.query("SELECT id FROM users WHERE email = $1", [
     email,
   ]);
@@ -32,7 +33,13 @@ export const registerUser = async (
   return { user, token };
 };
 
-export const loginUser = async (email: string, password: string) => {
+export const loginUser = async (
+  email: string,
+  password: string,
+): Promise<{
+  user: { id: string; name: string; email: string; created_at: Date };
+  token: string;
+}> => {
   const result = await pool.query("SELECT * FROM users WHERE email = $1", [
     email,
   ]);
@@ -56,7 +63,9 @@ export const loginUser = async (email: string, password: string) => {
   };
 };
 
-export const getUserById = async (userId: string) => {
+export const getUserById = async (
+  userId: string,
+): Promise<{ id: string; name: string; email: string; created_at: Date }> => {
   const result = await pool.query(
     "SELECT id, name, email, created_at FROM users WHERE id = $1",
     [userId],

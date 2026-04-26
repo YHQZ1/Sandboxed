@@ -1,18 +1,45 @@
 import app from "./app";
 import http from "http";
-import dotenv from "dotenv";
 import { initSocket } from "./socket";
+import pool from "./config/postgres";
+import redis from "./config/redis";
 
-dotenv.config();
-
+const PORT = process.env.PORT || 4000;
 const server = http.createServer(app);
 
 initSocket(server);
 
-const PORT = process.env.PORT || 4000;
-
-server.listen(PORT, () => {
-  console.log(`Dojo server running on port ${PORT}`);
+server.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use`);
+    process.exit(1);
+  }
+  throw error;
 });
 
-export { server };
+server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
+
+const gracefulShutdown = async (signal: string) => {
+  console.log(`${signal} received, shutting down gracefully`);
+  server.close(async () => {
+    try {
+      await pool.end();
+      redis.disconnect();
+      console.log("Connections closed");
+      process.exit(0);
+    } catch (err) {
+      console.error("Error during shutdown", err);
+      process.exit(1);
+    }
+  });
+
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout");
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

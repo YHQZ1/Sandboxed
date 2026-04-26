@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -33,14 +32,28 @@ export default function JoinRoom() {
         localStorage.setItem("userId", loginRes.data.user.id);
         localStorage.setItem("hostName", loginRes.data.user.name);
       }
-      await api.post(`/rooms/${code.toUpperCase()}/join`, { name, role });
+      await api.post(`/rooms/${code.toLowerCase()}/join`, { name, role });
       sessionStorage.setItem(
-        `room:${code.toUpperCase()}`,
+        `room:${code.toLowerCase()}`,
         JSON.stringify({ name, role }),
       );
-      navigate(`/room/${code.toUpperCase()}`, { state: { name, role } });
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to join room.");
+      navigate(`/room/${code.toLowerCase()}`, { state: { name, role } });
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "response" in err &&
+        err.response &&
+        typeof err.response === "object" &&
+        "data" in err.response &&
+        err.response.data &&
+        typeof err.response.data === "object" &&
+        "error" in err.response.data
+      ) {
+        setError(String(err.response.data.error));
+      } else {
+        setError("Failed to join room.");
+      }
     } finally {
       setLoading(false);
     }
@@ -51,9 +64,9 @@ export default function JoinRoom() {
       <div className="max-w-sm w-full flex flex-col">
         <button
           onClick={() => navigate("/")}
-          className="text-sm text-[#737373] hover:text-[#ededed] transition-colors mb-12 self-start flex items-center gap-2"
+          className="text-sm text-[#737373] hover:text-[#ededed] transition-colors mb-12 self-start"
         >
-          ← Back to home
+          Back to home
         </button>
 
         <h1 className="text-3xl font-medium tracking-tight text-[#f5f5f5] mb-2">
@@ -73,10 +86,10 @@ export default function JoinRoom() {
           <div className="flex flex-col gap-2">
             <label className="text-sm text-[#737373]">Room code</label>
             <input
-              placeholder="e.g. STORM-4821"
+              placeholder="e.g. abc123"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm uppercase tracking-wider"
+              onChange={(e) => setCode(e.target.value.toLowerCase())}
+              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm lowercase"
             />
           </div>
 
@@ -126,7 +139,7 @@ export default function JoinRoom() {
                 <label className="text-sm text-[#737373]">Host password</label>
                 <input
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="········"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleJoin()}

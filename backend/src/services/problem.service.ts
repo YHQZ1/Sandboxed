@@ -1,23 +1,36 @@
-import pool from "../config/db";
+import pool from "../config/postgres";
+
+interface CreateProblemData {
+  title: string;
+  description: string;
+  input_format?: string;
+  output_format?: string;
+  constraints?: string;
+  points?: number;
+  time_limit?: number;
+  memory_limit?: number;
+}
+
+interface UpdateProblemData {
+  title?: string;
+  description?: string;
+  input_format?: string;
+  output_format?: string;
+  constraints?: string;
+  points?: number;
+  time_limit?: number;
+  memory_limit?: number;
+}
 
 export const createProblem = async (
   roomId: string,
-  data: {
-    title: string;
-    description: string;
-    input_format?: string;
-    output_format?: string;
-    constraints?: string;
-    points?: number;
-    time_limit?: number;
-    memory_limit?: number;
-  },
+  data: CreateProblemData,
 ) => {
   const countResult = await pool.query(
     "SELECT COUNT(*) FROM problems WHERE room_id = $1",
     [roomId],
   );
-  const orderIndex = parseInt(countResult.rows[0].count);
+  const orderIndex = parseInt(countResult.rows[0].count, 10);
 
   const result = await pool.query(
     `INSERT INTO problems
@@ -42,7 +55,7 @@ export const createProblem = async (
 
 export const getProblems = async (roomId: string) => {
   const result = await pool.query(
-    `SELECT p.*, 
+    `SELECT p.*,
        json_agg(
          json_build_object(
            'id', tc.id,
@@ -86,53 +99,28 @@ export const getProblemById = async (problemId: string) => {
 
 export const updateProblem = async (
   problemId: string,
-  data: {
-    title?: string;
-    description?: string;
-    input_format?: string;
-    output_format?: string;
-    constraints?: string;
-    points?: number;
-    time_limit?: number;
-    memory_limit?: number;
-  },
+  data: UpdateProblemData,
 ) => {
   const fields: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
   let i = 1;
 
-  if (data.title !== undefined) {
-    fields.push(`title = $${i++}`);
-    values.push(data.title);
-  }
-  if (data.description !== undefined) {
-    fields.push(`description = $${i++}`);
-    values.push(data.description);
-  }
-  if (data.input_format !== undefined) {
-    fields.push(`input_format = $${i++}`);
-    values.push(data.input_format);
-  }
-  if (data.output_format !== undefined) {
-    fields.push(`output_format = $${i++}`);
-    values.push(data.output_format);
-  }
-  if (data.constraints !== undefined) {
-    fields.push(`constraints = $${i++}`);
-    values.push(data.constraints);
-  }
-  if (data.points !== undefined) {
-    fields.push(`points = $${i++}`);
-    values.push(data.points);
-  }
-  if (data.time_limit !== undefined) {
-    fields.push(`time_limit = $${i++}`);
-    values.push(data.time_limit);
-  }
-  if (data.memory_limit !== undefined) {
-    fields.push(`memory_limit = $${i++}`);
-    values.push(data.memory_limit);
-  }
+  const setField = (name: string, value: unknown) => {
+    fields.push(`${name} = $${i++}`);
+    values.push(value);
+  };
+
+  if (data.title !== undefined) setField("title", data.title);
+  if (data.description !== undefined) setField("description", data.description);
+  if (data.input_format !== undefined)
+    setField("input_format", data.input_format);
+  if (data.output_format !== undefined)
+    setField("output_format", data.output_format);
+  if (data.constraints !== undefined) setField("constraints", data.constraints);
+  if (data.points !== undefined) setField("points", data.points);
+  if (data.time_limit !== undefined) setField("time_limit", data.time_limit);
+  if (data.memory_limit !== undefined)
+    setField("memory_limit", data.memory_limit);
 
   if (fields.length === 0) throw new Error("Nothing to update");
 
@@ -145,7 +133,7 @@ export const updateProblem = async (
   return result.rows[0];
 };
 
-export const deleteProblem = async (problemId: string) => {
+export const deleteProblem = async (problemId: string): Promise<void> => {
   const result = await pool.query(
     "DELETE FROM problems WHERE id = $1 RETURNING id",
     [problemId],
@@ -163,7 +151,7 @@ export const addTestCase = async (
     "SELECT COUNT(*) FROM test_cases WHERE problem_id = $1",
     [problemId],
   );
-  const orderIndex = parseInt(countResult.rows[0].count);
+  const orderIndex = parseInt(countResult.rows[0].count, 10);
 
   const result = await pool.query(
     `INSERT INTO test_cases (problem_id, input, expected_output, is_sample, order_index)
@@ -173,7 +161,7 @@ export const addTestCase = async (
   return result.rows[0];
 };
 
-export const deleteTestCase = async (testCaseId: string) => {
+export const deleteTestCase = async (testCaseId: string): Promise<void> => {
   const result = await pool.query(
     "DELETE FROM test_cases WHERE id = $1 RETURNING id",
     [testCaseId],
@@ -185,6 +173,8 @@ export const getPublicProblems = async (roomId: string) => {
   const problems = await getProblems(roomId);
   return problems.map((p) => ({
     ...p,
-    test_cases: (p.test_cases || []).filter((tc: any) => tc.is_sample),
+    test_cases: (p.test_cases || []).filter(
+      (tc: { is_sample: boolean }) => tc.is_sample,
+    ),
   }));
 };

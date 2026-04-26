@@ -33,7 +33,7 @@ const VERDICT_STYLE: Record<SubmissionStatus, string> = {
   queued: "text-[#404040] border border-[#262626]",
 };
 
-const VERDICT_LABEL: Record<SubmissionStatus, string> = {
+const VERDICT_SHORT: Record<SubmissionStatus, string> = {
   accepted: "AC",
   wrong_answer: "WA",
   tle: "TLE",
@@ -86,8 +86,8 @@ export default function SubmissionHistory({
       }
 
       setLocalSubmissions(filteredData);
-    } catch (err) {
-      console.error("Failed to fetch submissions:", err);
+    } catch {
+      // silently handle error
     } finally {
       setLoading(false);
     }
@@ -104,7 +104,7 @@ export default function SubmissionHistory({
       const res = await api.get(`/submissions/${submission.id}`);
       setCode(res.data.submission.code);
     } catch {
-      setCode("Failed to load code");
+      setCode("Unable to load source code");
     } finally {
       setLoadingCode(false);
     }
@@ -118,28 +118,28 @@ export default function SubmissionHistory({
       hour12: false,
     });
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <span className="text-sm text-[#404040] animate-pulse">
-          Fetching history...
-        </span>
+        <div className="w-6 h-6 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin" />
       </div>
     );
+  }
 
-  if (localSubmissions.length === 0)
+  if (localSubmissions.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <span className="text-sm text-[#404040]">No submissions recorded.</span>
+        <span className="text-sm text-[#404040]">No submissions yet</span>
       </div>
     );
+  }
 
   return (
     <>
-      <div className="flex flex-col font-sans w-full selection:bg-[#262626]">
+      <div className="flex flex-col w-full selection:bg-[#262626]">
         <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-2 px-1">
           <span className="text-sm font-medium text-[#737373]">
-            Submission Logs
+            Submissions
           </span>
           <span className="text-xs font-medium text-[#404040]">
             {localSubmissions.length} total
@@ -151,12 +151,12 @@ export default function SubmissionHistory({
             <div
               key={s.id}
               onClick={() => handleViewCode(s)}
-              className="flex items-center gap-4 py-3.5 border-b border-[#262626]/50 last:border-0 hover:bg-[#111111] cursor-pointer transition-colors px-3 -mx-3 rounded-sm group"
+              className="flex items-center gap-4 py-3 border-b border-[#262626]/50 last:border-0 hover:bg-[#111111] cursor-pointer transition-colors px-3 -mx-3 rounded-sm"
             >
               <span
                 className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm flex-shrink-0 min-w-[36px] text-center ${VERDICT_STYLE[s.status]}`}
               >
-                {VERDICT_LABEL[s.status]}
+                {VERDICT_SHORT[s.status]}
               </span>
 
               <span className="text-xs font-medium text-[#525252] min-w-[50px]">
@@ -192,14 +192,14 @@ export default function SubmissionHistory({
       </div>
 
       {selected && (
-        <div className="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 md:p-8">
+        <div className="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#0a0a0a] border border-[#262626] rounded-sm w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] flex-shrink-0 bg-[#111111]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] flex-shrink-0">
               <div className="flex items-center gap-4">
                 <span
                   className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm ${VERDICT_STYLE[selected.status]}`}
                 >
-                  {VERDICT_LABEL[selected.status]}
+                  {VERDICT_SHORT[selected.status]}
                 </span>
                 <span className="text-sm font-medium text-[#f5f5f5]">
                   {selected.participant_name}
@@ -212,19 +212,17 @@ export default function SubmissionHistory({
                 onClick={() => setSelected(null)}
                 className="text-xs font-medium text-[#737373] hover:text-[#ededed] transition-colors"
               >
-                CLOSE
+                Close
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-[#0a0a0a] p-6">
+            <div className="flex-1 overflow-auto p-6">
               {loadingCode ? (
                 <div className="flex items-center justify-center h-full">
-                  <span className="text-sm text-[#404040] animate-pulse">
-                    Loading source...
-                  </span>
+                  <div className="w-6 h-6 border-2 border-[#262626] border-t-[#ededed] rounded-full animate-spin" />
                 </div>
               ) : (
-                <pre className="font-mono text-sm text-[#a3a3a3] whitespace-pre leading-relaxed selection:bg-[#262626]">
+                <pre className="font-mono text-sm text-[#a3a3a3] whitespace-pre-wrap leading-relaxed">
                   {code}
                 </pre>
               )}

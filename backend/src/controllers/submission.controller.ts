@@ -29,25 +29,26 @@ export const submit = async (req: Request, res: Response): Promise<void> => {
 
   try {
     const submission = await submitCode(
-      roomCode.toUpperCase(),
+      roomCode,
       problemId,
       participantName,
       language,
       code,
     );
     res.status(201).json({ submissionId: submission.id, status: "queued" });
-  } catch (err: any) {
-    const clientErrors = [
-      "Room not found",
-      "Contest is not active",
-      "Already solved",
-      "Problem not found",
-    ];
-    if (clientErrors.includes(err.message)) {
-      res.status(400).json({ error: err.message });
-      return;
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      const clientErrors = [
+        "Room not found",
+        "Contest is not active",
+        "Already solved",
+        "Problem not found",
+      ];
+      if (clientErrors.includes(err.message)) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
     }
-    console.error("Submit error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -60,12 +61,11 @@ export const getVerdict = async (
   try {
     const submission = await getSubmission(id);
     res.json({ submission });
-  } catch (err: any) {
-    if (err.message === "Submission not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Submission not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("Get verdict error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -76,20 +76,19 @@ export const listRoomSubmissions = async (
 ): Promise<void> => {
   const { code } = req.params;
   try {
-    const room = await getRoomByCode(code.toUpperCase());
-    const isHost = await verifyRoomHost(code.toUpperCase(), req.user!.userId);
+    const room = await getRoomByCode(code);
+    const isHost = await verifyRoomHost(code, req.user!.userId);
     if (!isHost) {
       res.status(403).json({ error: "Hosts only" });
       return;
     }
     const submissions = await getRoomSubmissions(room.id);
     res.json({ submissions });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("List submissions error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -100,15 +99,14 @@ export const listParticipantSubmissions = async (
 ): Promise<void> => {
   const { code, name } = req.params;
   try {
-    const room = await getRoomByCode(code.toUpperCase());
+    const room = await getRoomByCode(code);
     const submissions = await getParticipantSubmissions(room.id, name);
     res.json({ submissions });
-  } catch (err: any) {
-    if (err.message === "Room not found") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Room not found") {
       res.status(404).json({ error: err.message });
       return;
     }
-    console.error("List participant submissions error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
