@@ -99,6 +99,34 @@ func compile(dir, language, srcFile string) error {
 	return nil
 }
 
+func RunDirect(language string, code string, input string, timeLimit int, memoryLimit int) (string, string, error) {
+	dir, err := os.MkdirTemp("", "dojo-run-*")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	srcFile, err := writeSourceFile(dir, language, code)
+	if err != nil {
+		return "", "", err
+	}
+
+	if err := compile(dir, language, srcFile); err != nil {
+		return "", err.Error(), nil
+	}
+
+	result := runInDocker(dir, language, input, "", "direct", timeLimit, memoryLimit)
+
+	if result.Status == "runtime_error" {
+		return "", result.ActualOutput, nil
+	}
+	if result.Status == "tle" {
+		return "", "Time limit exceeded", nil
+	}
+
+	return result.ActualOutput, "", nil
+}
+
 func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLimit, memoryLimit int) TestCaseResult {
 	image := dockerImage(language)
 

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/YHQZ1/dojo/judge/config"
+	"github.com/YHQZ1/dojo/judge/server"
 	"github.com/YHQZ1/dojo/judge/worker"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -37,6 +38,8 @@ func main() {
 		log.Fatalf("Postgres ping failed: %v", err)
 	}
 	log.Println("Connected to PostgreSQL")
+
+	go server.Start("5001")
 
 	w := worker.New(redisClient, db)
 

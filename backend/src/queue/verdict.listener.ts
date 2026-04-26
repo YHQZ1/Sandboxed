@@ -79,6 +79,20 @@ export const startVerdictListener = () => {
         timeTaken,
       });
 
+      const problemResult = await pool.query(
+        "SELECT title FROM problems WHERE id = $1",
+        [verdict.problemId],
+      );
+      const problemTitle = problemResult.rows[0]?.title || "Unknown";
+
+      io.to(`room:${verdict.roomCode}`).emit("submission_update", {
+        submissionId: verdict.submissionId,
+        participantName: verdict.participantName,
+        problemTitle,
+        status: verdict.status,
+        score: verdict.score,
+      });
+
       const leaderboard = await getLeaderboard(roomCode);
       io.to(`room:${roomCode}`).emit("leaderboard_update", { leaderboard });
     } catch (err) {

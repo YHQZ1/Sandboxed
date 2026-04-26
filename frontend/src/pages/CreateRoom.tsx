@@ -1,37 +1,32 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 
 export default function CreateRoom() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"login" | "create">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [duration, setDuration] = useState(90);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hostName, setHostName] = useState("");
 
-  const handleLogin = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api.post("/auth/login", { email, password });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("userId", res.data.user.id);
-      localStorage.setItem("hostName", res.data.user.name);
-      setName(res.data.user.name);
-      setStep("create");
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Login failed");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const storedName = localStorage.getItem("hostName");
+    if (!token) {
+      navigate("/login");
+    } else {
+      setHostName(storedName || "Host");
     }
-  };
+  }, [navigate]);
 
   const handleCreate = async () => {
+    if (!roomName) {
+      setError("Contest name is required.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -40,102 +35,79 @@ export default function CreateRoom() {
         timerDuration: duration * 60,
       });
       const code = res.data.room.code;
-      navigate(`/room/${code}`, {
-        state: { name, role: "host" },
-      });
+      sessionStorage.setItem(
+        `room:${code}`,
+        JSON.stringify({ name: hostName, role: "host" }),
+      );
+      navigate(`/room/${code}`, { state: { name: hostName, role: "host" } });
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to create room");
+      setError(err.response?.data?.error || "Failed to create room.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-      <div className="w-full max-w-md bg-zinc-900 rounded-xl p-8 border border-zinc-800">
-        <div className="flex items-center gap-2 mb-6">
-          <button
-            onClick={() => navigate("/")}
-            className="text-zinc-500 hover:text-white transition text-sm"
-          >
-            Back
-          </button>
-        </div>
-        <h1 className="text-2xl font-bold mb-6">
-          {step === "login" ? "Host Login" : "Create Contest Room"}
+    <div className="min-h-screen bg-[#0a0a0a] text-[#ededed] font-sans flex flex-col justify-center items-center px-6 selection:bg-[#262626] selection:text-[#ededed]">
+      <div className="max-w-sm w-full flex flex-col">
+        <button
+          onClick={() => navigate("/")}
+          className="text-sm text-[#737373] hover:text-[#ededed] transition-colors mb-12 self-start flex items-center gap-2"
+        >
+          ← Back to home
+        </button>
+
+        <h1 className="text-3xl font-medium tracking-tight text-[#f5f5f5] mb-2">
+          Room details
         </h1>
+        <p className="text-[#a3a3a3] text-sm leading-relaxed mb-8">
+          Configure the parameters for your live coding session.
+        </p>
 
-        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-
-        {step === "login" ? (
-          <div className="flex flex-col gap-4">
-            <input
-              className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20"
-              placeholder="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
-            <input
-              className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20"
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              className="bg-white text-black font-semibold py-3 rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-            >
-              {loading ? "Logging in..." : "Continue"}
-            </button>
-            <p className="text-zinc-500 text-sm text-center">
-              No account?{" "}
-              <span
-                onClick={() => navigate("/register")}
-                className="text-white underline cursor-pointer"
-              >
-                Register
-              </span>
-            </p>
+        {error && (
+          <div className="bg-[#171717] border border-[#262626] px-4 py-3 rounded mb-6">
+            <p className="text-sm text-[#ededed]">{error}</p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="bg-zinc-800 rounded-lg px-4 py-3 text-zinc-400 text-sm">
-              Hosting as <span className="text-white font-medium">{name}</span>
-            </div>
+        )}
+
+        <div className="flex flex-col gap-5 mb-8">
+          <div className="text-sm text-[#737373] pb-4 border-b border-[#262626] mb-2">
+            Authenticated as{" "}
+            <span className="text-[#ededed] font-medium">{hostName}</span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-[#737373]">Contest Name</label>
             <input
-              className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20"
-              placeholder="Contest name (e.g. Round 1 - Backend)"
+              type="text"
+              placeholder="e.g. Round 1 — Backend"
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
             />
-            <div>
-              <label className="text-zinc-400 text-sm mb-1 block">
-                Duration (minutes)
-              </label>
-              <input
-                className="bg-zinc-800 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-white/20 w-full"
-                type="number"
-                min={10}
-                max={300}
-                value={duration}
-                onChange={(e) => setDuration(parseInt(e.target.value))}
-              />
-            </div>
-            <button
-              onClick={handleCreate}
-              disabled={loading || !roomName}
-              className="bg-white text-black font-semibold py-3 rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create Room"}
-            </button>
           </div>
-        )}
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-[#737373]">Duration (minutes)</label>
+            <input
+              type="number"
+              min={10}
+              max={300}
+              value={duration}
+              onChange={(e) => setDuration(parseInt(e.target.value, 10))}
+              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] outline-none focus:border-[#737373] transition-colors text-sm"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={loading || !roomName}
+          className="w-full px-8 py-3.5 text-sm font-medium bg-[#ededed] text-[#0a0a0a] rounded hover:bg-[#d4d4d4] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? "Creating environment..." : "Create Room"}
+        </button>
       </div>
     </div>
   );

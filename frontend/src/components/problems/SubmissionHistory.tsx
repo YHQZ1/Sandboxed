@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import api from "../../lib/api";
+import { useRoomStore } from "../../store/roomStore";
 import type { SubmissionStatus, Language } from "../../types";
 
 interface SubmissionRecord {
@@ -21,14 +22,15 @@ interface Props {
   problemId?: string | null;
 }
 
-const VERDICT_COLOR: Record<SubmissionStatus, string> = {
-  accepted: "text-green-400 bg-green-400/10",
-  wrong_answer: "text-red-400 bg-red-400/10",
-  tle: "text-yellow-400 bg-yellow-400/10",
-  runtime_error: "text-orange-400 bg-orange-400/10",
-  compilation_error: "text-red-500 bg-red-500/10",
-  queued: "text-zinc-400 bg-zinc-400/10",
-  judging: "text-blue-400 bg-blue-400/10",
+const VERDICT_STYLE: Record<SubmissionStatus, string> = {
+  accepted: "text-[#ededed] border border-[#262626] bg-[#171717]",
+  wrong_answer: "text-[#ef4444] border border-[#ef4444]/20 bg-[#ef4444]/10",
+  tle: "text-[#737373] border border-[#262626]",
+  runtime_error: "text-[#ef4444] border border-[#ef4444]/20 bg-[#ef4444]/10",
+  compilation_error:
+    "text-[#ef4444] border border-[#ef4444]/20 bg-[#ef4444]/10",
+  judging: "text-[#ededed] border border-[#262626] animate-pulse",
+  queued: "text-[#404040] border border-[#262626]",
 };
 
 const VERDICT_LABEL: Record<SubmissionStatus, string> = {
@@ -55,34 +57,41 @@ export default function SubmissionHistory({
   role,
   problemId,
 }: Props) {
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
+  const [localSubmissions, setLocalSubmissions] = useState<SubmissionRecord[]>(
+    [],
+  );
+  const { setSubmissions: setGlobalSubmissions } = useRoomStore();
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SubmissionRecord | null>(null);
-  const [code, setCode] = useState<string>("");
+  const [code, setCode] = useState("");
   const [loadingCode, setLoadingCode] = useState(false);
 
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
     try {
-      let res;
+      const res =
+        role === "host"
+          ? await api.get(`/rooms/${roomCode}/submissions`)
+          : await api.get(`/rooms/${roomCode}/submissions/${participantName}`);
+
+      const allData: SubmissionRecord[] = res.data.submissions || [];
+
       if (role === "host") {
-        res = await api.get(`/rooms/${roomCode}/submissions`);
-      } else {
-        res = await api.get(
-          `/rooms/${roomCode}/submissions/${participantName}`,
-        );
+        setGlobalSubmissions(allData);
       }
-      let data: SubmissionRecord[] = res.data.submissions || [];
+
+      let filteredData = allData;
       if (problemId) {
-        data = data.filter((s) => s.problem_id === problemId);
+        filteredData = allData.filter((s) => s.problem_id === problemId);
       }
-      setSubmissions(data);
+
+      setLocalSubmissions(filteredData);
     } catch (err) {
       console.error("Failed to fetch submissions:", err);
     } finally {
       setLoading(false);
     }
-  }, [roomCode, participantName, role, problemId]);
+  }, [roomCode, participantName, role, problemId, setGlobalSubmissions]);
 
   useEffect(() => {
     fetchSubmissions();
@@ -101,99 +110,121 @@ export default function SubmissionHistory({
     }
   };
 
-  const fmt = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+      hour12: false,
     });
-  };
 
-  if (loading) {
+  if (loading)
     return (
-      <div className="flex items-center justify-center py-8">
-        <span className="text-zinc-600 text-sm">Loading submissions...</span>
+      <div className="flex items-center justify-center py-12">
+        <span className="text-sm text-[#404040] animate-pulse">
+          Fetching history...
+        </span>
       </div>
     );
-  }
 
-  if (submissions.length === 0) {
+  if (localSubmissions.length === 0)
     return (
-      <div className="flex items-center justify-center py-8">
-        <span className="text-zinc-600 text-sm">No submissions yet</span>
+      <div className="flex items-center justify-center py-12">
+        <span className="text-sm text-[#404040]">No submissions recorded.</span>
       </div>
     );
-  }
 
   return (
     <>
-      <div className="flex flex-col gap-1">
-        {submissions.map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-zinc-800 cursor-pointer transition group"
-            onClick={() => handleViewCode(s)}
-          >
-            <span
-              className={`text-xs font-bold px-1.5 py-0.5 rounded font-mono ${VERDICT_COLOR[s.status]}`}
+      <div className="flex flex-col font-sans w-full selection:bg-[#262626]">
+        <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-2 px-1">
+          <span className="text-sm font-medium text-[#737373]">
+            Submission Logs
+          </span>
+          <span className="text-xs font-medium text-[#404040]">
+            {localSubmissions.length} total
+          </span>
+        </div>
+
+        <div className="flex flex-col">
+          {localSubmissions.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => handleViewCode(s)}
+              className="flex items-center gap-4 py-3.5 border-b border-[#262626]/50 last:border-0 hover:bg-[#111111] cursor-pointer transition-colors px-3 -mx-3 rounded-sm group"
             >
-              {VERDICT_LABEL[s.status]}
-            </span>
-            <span className="text-xs text-zinc-500 font-mono">
-              {LANG_LABEL[s.language]}
-            </span>
-            {role === "host" && (
-              <span className="text-xs text-zinc-400 flex-1 truncate">
-                {s.participant_name}
+              <span
+                className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm flex-shrink-0 min-w-[36px] text-center ${VERDICT_STYLE[s.status]}`}
+              >
+                {VERDICT_LABEL[s.status]}
               </span>
-            )}
-            {role !== "host" && <span className="flex-1" />}
-            {s.time_taken && (
-              <span className="text-xs text-zinc-600">{s.time_taken}ms</span>
-            )}
-            {s.status === "accepted" && (
-              <span className="text-xs text-green-400">+{s.score}pt</span>
-            )}
-            <span className="text-xs text-zinc-600">{fmt(s.submitted_at)}</span>
-          </div>
-        ))}
+
+              <span className="text-xs font-medium text-[#525252] min-w-[50px]">
+                {LANG_LABEL[s.language]}
+              </span>
+
+              {role === "host" ? (
+                <span className="text-sm font-medium text-[#a3a3a3] flex-1 truncate">
+                  {s.participant_name}
+                </span>
+              ) : (
+                <span className="flex-1" />
+              )}
+
+              <div className="flex items-center gap-4 flex-shrink-0">
+                {s.time_taken && (
+                  <span className="text-xs text-[#404040] tabular-nums hidden sm:inline">
+                    {s.time_taken}ms
+                  </span>
+                )}
+                {s.status === "accepted" && (
+                  <span className="text-xs font-medium text-[#ededed]">
+                    +{s.score}pt
+                  </span>
+                )}
+                <span className="text-xs text-[#404040] tabular-nums">
+                  {fmt(s.submitted_at)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {selected && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-              <div className="flex items-center gap-3">
+        <div className="fixed inset-0 bg-[#0a0a0a]/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 md:p-8">
+          <div className="bg-[#0a0a0a] border border-[#262626] rounded-sm w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] flex-shrink-0 bg-[#111111]">
+              <div className="flex items-center gap-4">
                 <span
-                  className={`text-xs font-bold px-2 py-1 rounded font-mono ${VERDICT_COLOR[selected.status]}`}
+                  className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm ${VERDICT_STYLE[selected.status]}`}
                 >
                   {VERDICT_LABEL[selected.status]}
                 </span>
-                <span className="text-sm font-medium">
+                <span className="text-sm font-medium text-[#f5f5f5]">
                   {selected.participant_name}
                 </span>
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-[#737373]">
                   {LANG_LABEL[selected.language]}
                 </span>
-                {selected.time_taken && (
-                  <span className="text-xs text-zinc-600">
-                    {selected.time_taken}ms
-                  </span>
-                )}
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="text-zinc-500 hover:text-white transition text-xl leading-none"
+                className="text-xs font-medium text-[#737373] hover:text-[#ededed] transition-colors"
               >
-                x
+                CLOSE
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4">
+
+            <div className="flex-1 overflow-auto bg-[#0a0a0a] p-6">
               {loadingCode ? (
-                <p className="text-zinc-500 text-sm">Loading code...</p>
+                <div className="flex items-center justify-center h-full">
+                  <span className="text-sm text-[#404040] animate-pulse">
+                    Loading source...
+                  </span>
+                </div>
               ) : (
-                <pre className="text-sm text-zinc-200 font-mono whitespace-pre-wrap">
+                <pre className="font-mono text-sm text-[#a3a3a3] whitespace-pre leading-relaxed selection:bg-[#262626]">
                   {code}
                 </pre>
               )}

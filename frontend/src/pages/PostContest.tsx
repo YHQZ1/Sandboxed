@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -31,14 +30,14 @@ interface Problem {
   order_index: number;
 }
 
-const VERDICT_COLOR: Record<SubmissionStatus, string> = {
-  accepted: "text-green-400 bg-green-400/10",
-  wrong_answer: "text-red-400 bg-red-400/10",
-  tle: "text-yellow-400 bg-yellow-400/10",
-  runtime_error: "text-orange-400 bg-orange-400/10",
-  compilation_error: "text-red-500 bg-red-500/10",
-  queued: "text-zinc-400 bg-zinc-400/10",
-  judging: "text-blue-400 bg-blue-400/10",
+const VERDICT_STYLE: Record<SubmissionStatus, string> = {
+  accepted: "text-[#8BA888] border-[#8BA888]/20 bg-[#8BA888]/5",
+  wrong_answer: "text-[#C27373] border-[#C27373]/20 bg-[#C27373]/5",
+  tle: "text-[#737373] border-[#262626] bg-transparent",
+  runtime_error: "text-[#C27373] border-[#C27373]/20 bg-[#C27373]/5",
+  compilation_error: "text-[#C27373] border-[#C27373]/20 bg-[#C27373]/5",
+  queued: "text-[#404040] border-[#262626] bg-transparent",
+  judging: "text-[#a3a3a3] border-[#262626] bg-transparent animate-pulse",
 };
 
 const VERDICT_SHORT: Record<SubmissionStatus, string> = {
@@ -49,6 +48,16 @@ const VERDICT_SHORT: Record<SubmissionStatus, string> = {
   compilation_error: "CE",
   queued: "QU",
   judging: "...",
+};
+
+const VERDICT_LABEL: Record<SubmissionStatus, string> = {
+  accepted: "ACCEPTED",
+  wrong_answer: "WRONG ANSWER",
+  tle: "TIME LIMIT EXCEEDED",
+  runtime_error: "RUNTIME ERROR",
+  compilation_error: "COMPILATION ERROR",
+  queued: "QUEUED",
+  judging: "JUDGING...",
 };
 
 const LANG_LABEL: Record<Language, string> = {
@@ -66,7 +75,6 @@ export default function PostContest() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(
     null,
   );
@@ -79,7 +87,6 @@ export default function PostContest() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setError("");
     try {
       const [roomRes, submissionsRes] = await Promise.all([
         api.get(`/rooms/${code}`),
@@ -91,8 +98,8 @@ export default function PostContest() {
 
       const allSubmissions: SubmissionRecord[] =
         submissionsRes.data.submissions || [];
-
       const map = new Map<string, ParticipantSummary>();
+
       for (const s of allSubmissions) {
         if (!map.has(s.participant_name)) {
           map.set(s.participant_name, {
@@ -111,10 +118,9 @@ export default function PostContest() {
 
       const sorted = Array.from(map.values()).sort((a, b) => b.score - a.score);
       setParticipants(sorted);
-
       if (sorted.length > 0) setSelectedParticipant(sorted[0].name);
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to load contest data");
+    } catch {
+      console.error("Failed to load contest data");
     } finally {
       setLoading(false);
     }
@@ -132,7 +138,7 @@ export default function PostContest() {
       setSelectedCode({ code: s.code, language: s.language, status: s.status });
     } catch {
       setSelectedCode({
-        code: "Failed to load code",
+        code: "Internal storage error",
         language: "python",
         status: "runtime_error",
       });
@@ -149,9 +155,9 @@ export default function PostContest() {
     const p = participants.find((p) => p.name === participantName);
     if (!p) return null;
     const subs = p.submissions.filter((s) => s.problem_id === problemId);
-    const accepted = subs.find((s) => s.status === "accepted");
-    if (accepted) return accepted;
-    return subs[subs.length - 1] || null;
+    return (
+      subs.find((s) => s.status === "accepted") || subs[subs.length - 1] || null
+    );
   };
 
   const fmt = (iso: string) =>
@@ -159,275 +165,210 @@ export default function PostContest() {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+      hour12: false,
     });
-
-  const medals = ["#1", "#2", "#3"];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-        <p className="text-zinc-500">Loading contest results...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">{error}</p>
-          <button
-            onClick={() => navigate("/")}
-            className="text-zinc-400 hover:text-white text-sm"
-          >
-            Home
-          </button>
-        </div>
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#404040] animate-pulse">
+          Analysing_Results
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-black">Dojo</span>
-          <div>
-            <h1 className="font-bold text-lg">Contest Results</h1>
-            <span className="font-mono text-xs text-zinc-500">{code}</span>
-          </div>
+    <div className="min-h-screen bg-[#050505] text-[#ededed] font-sans selection:bg-[#262626]">
+      <header className="border-b border-[#141414] px-8 py-4 flex items-center justify-between bg-[#050505]/80 backdrop-blur-md sticky top-0 z-30">
+        <div className="flex items-center gap-6">
+          <span className="text-lg font-medium tracking-tighter text-[#f5f5f5]">
+            Dojo.
+          </span>
+          <div className="h-4 w-px bg-[#1a1a1a]" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#404040]">
+            {code} / Archives
+          </span>
         </div>
         <button
           onClick={() => navigate("/")}
-          className="text-zinc-500 hover:text-white transition text-sm"
+          className="text-[10px] font-bold uppercase tracking-widest text-[#737373] hover:text-[#ededed] transition-colors"
         >
-          Home
+          Exit_To_Home
         </button>
-      </div>
+      </header>
 
-      <div className="max-w-6xl mx-auto p-6 flex flex-col gap-6">
-        {participants.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-              Final Standings
-            </h2>
-            <div className="flex gap-4 flex-wrap">
-              {participants.slice(0, 3).map((p, i) => (
-                <div
-                  key={p.name}
-                  className="flex-1 min-w-32 bg-zinc-800 rounded-xl p-4 text-center cursor-pointer hover:bg-zinc-700 transition"
-                  onClick={() => setSelectedParticipant(p.name)}
-                >
-                  <div className="text-2xl mb-1">
-                    {medals[i] || `#${i + 1}`}
-                  </div>
-                  <div className="font-bold text-sm">{p.name}</div>
-                  <div className="text-zinc-400 text-xs mt-1">
-                    {p.solvedCount} solved
-                  </div>
-                  <div className="font-mono font-bold text-lg mt-1">
-                    {p.score}pt
-                  </div>
-                </div>
-              ))}
-              {participants.slice(3).map((p, i) => (
-                <div
-                  key={p.name}
-                  className="flex-1 min-w-32 bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center cursor-pointer hover:bg-zinc-800 transition"
-                  onClick={() => setSelectedParticipant(p.name)}
-                >
-                  <div className="text-zinc-500 text-sm mb-1">#{i + 4}</div>
-                  <div className="font-bold text-sm">{p.name}</div>
-                  <div className="text-zinc-400 text-xs mt-1">
-                    {p.solvedCount} solved
-                  </div>
-                  <div className="font-mono font-bold text-lg mt-1">
-                    {p.score}pt
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {participants.length > 0 && problems.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-800">
-              <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-                Submission Matrix
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left px-4 py-3 text-zinc-500 font-medium">
-                      Participant
-                    </th>
-                    <th className="text-center px-4 py-3 text-zinc-500 font-medium">
-                      Score
-                    </th>
-                    {problems.map((p, i) => (
-                      <th
-                        key={p.id}
-                        className="text-center px-4 py-3 text-zinc-500 font-medium"
-                      >
-                        {String.fromCharCode(65 + i)}
-                        <span className="block text-xs font-normal text-zinc-600">
-                          {p.points}pt
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {participants.map((participant, idx) => (
-                    <tr
-                      key={participant.name}
-                      className={`border-b border-zinc-800/50 cursor-pointer transition ${
-                        selectedParticipant === participant.name
-                          ? "bg-zinc-800"
-                          : "hover:bg-zinc-800/50"
-                      }`}
-                      onClick={() => setSelectedParticipant(participant.name)}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-zinc-600 text-xs w-4">
-                            #{idx + 1}
-                          </span>
-                          <span className="font-medium">
-                            {participant.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono font-bold">
-                        {participant.score}
-                      </td>
-                      {problems.map((problem) => {
-                        const best = getBestSubmission(
-                          participant.name,
-                          problem.id,
-                        );
-                        return (
-                          <td
-                            key={problem.id}
-                            className="px-4 py-3 text-center"
-                          >
-                            {best ? (
-                              <span
-                                className={`text-xs font-bold px-2 py-1 rounded font-mono ${VERDICT_COLOR[best.status]}`}
-                              >
-                                {VERDICT_SHORT[best.status]}
-                              </span>
-                            ) : (
-                              <span className="text-zinc-700 text-xs">-</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {selectedSummary && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
-              <h2 className="font-semibold">
-                {selectedSummary.name}'s Submissions
-              </h2>
-              <div className="flex items-center gap-4 text-sm text-zinc-400">
-                <span>{selectedSummary.solvedCount} solved</span>
-                <span className="font-mono font-bold text-white">
-                  {selectedSummary.score}pt
+      <main className="max-w-7xl mx-auto px-8 py-12 space-y-12">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {participants.slice(0, 3).map((p, i) => (
+            <div
+              key={p.name}
+              className="bg-[#0a0a0a] border border-[#141414] p-8 rounded-sm relative overflow-hidden group"
+            >
+              <div className="absolute top-0 right-0 p-4 text-[40px] font-bold text-[#141414] leading-none select-none group-hover:text-[#1a1a1a] transition-colors">
+                0{i + 1}
+              </div>
+              <span className="text-[10px] font-bold text-[#404040] uppercase tracking-[0.2em] mb-4 block">
+                Ranked_Participant
+              </span>
+              <h3 className="text-xl font-medium mb-1">{p.name}</h3>
+              <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-6">
+                {p.solvedCount} Solved / {p.submissions.length} Tries
+              </p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-medium tabular-nums">
+                  {p.score}
+                </span>
+                <span className="text-[10px] font-bold text-[#404040]">
+                  PTS
                 </span>
               </div>
             </div>
-            <div className="divide-y divide-zinc-800">
-              {selectedSummary.submissions.length === 0 ? (
-                <p className="px-6 py-4 text-zinc-600 text-sm">
-                  No submissions
-                </p>
-              ) : (
-                selectedSummary.submissions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="px-6 py-3 flex items-center gap-3 hover:bg-zinc-800 cursor-pointer transition"
-                    onClick={() => handleViewCode(s.id)}
-                  >
-                    <span
-                      className={`text-xs font-bold px-2 py-1 rounded font-mono ${VERDICT_COLOR[s.status]}`}
+          ))}
+        </section>
+
+        <section className="bg-[#0a0a0a] border border-[#141414] rounded-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#141414] bg-[#050505]">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+              Execution_Matrix
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#141414]">
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest">
+                    Participant
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center">
+                    Final_Score
+                  </th>
+                  {problems.map((p, i) => (
+                    <th
+                      key={p.id}
+                      className="px-6 py-4 text-[10px] font-bold uppercase text-[#404040] tracking-widest text-center"
                     >
-                      {VERDICT_SHORT[s.status]}
-                    </span>
-                    <span className="text-xs text-zinc-500">
-                      {LANG_LABEL[s.language]}
-                    </span>
-                    <span className="text-xs text-zinc-600 flex-1">
-                      {problems.find((p) => p.id === s.problem_id)?.title ||
-                        "Unknown problem"}
-                    </span>
-                    {s.time_taken && (
-                      <span className="text-xs text-zinc-600">
-                        {s.time_taken}ms
+                      {String.fromCharCode(65 + i)}
+                      <span className="block text-[8px] opacity-40 font-normal">
+                        {p.points}P
                       </span>
-                    )}
-                    {s.status === "accepted" && (
-                      <span className="text-xs text-green-400">
-                        +{s.score}pt
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#141414]/50">
+                {participants.map((participant, idx) => (
+                  <tr
+                    key={participant.name}
+                    onClick={() => setSelectedParticipant(participant.name)}
+                    className={`transition-colors cursor-pointer ${selectedParticipant === participant.name ? "bg-[#111]" : "hover:bg-[#080808]"}`}
+                  >
+                    <td className="px-6 py-4 flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-[#222]">
+                        {(idx + 1).toString().padStart(2, "0")}
                       </span>
-                    )}
-                    <span className="text-xs text-zinc-600">
-                      {fmt(s.submitted_at)}
-                    </span>
-                    <span className="text-xs text-zinc-600 hover:text-white transition">
-                      View code
-                    </span>
+                      <span className="text-sm font-medium">
+                        {participant.name}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold tabular-nums text-sm">
+                      {participant.score}
+                    </td>
+                    {problems.map((problem) => {
+                      const best = getBestSubmission(
+                        participant.name,
+                        problem.id,
+                      );
+                      return (
+                        <td key={problem.id} className="px-6 py-4 text-center">
+                          {best ? (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${VERDICT_STYLE[best.status]}`}
+                            >
+                              {VERDICT_SHORT[best.status]}
+                            </span>
+                          ) : (
+                            <span className="text-[#1a1a1a]">--</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                Audit_Logs / {selectedParticipant}
+              </span>
+            </div>
+            <div className="bg-[#0a0a0a] border border-[#141414] divide-y divide-[#141414]">
+              {selectedSummary?.submissions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => handleViewCode(s.id)}
+                  className="w-full flex items-center gap-6 px-6 py-4 hover:bg-[#111] transition-colors group border-none bg-transparent"
+                >
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border w-10 text-center ${VERDICT_STYLE[s.status]}`}
+                  >
+                    {VERDICT_SHORT[s.status]}
+                  </span>
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium text-[#ededed] group-hover:text-white">
+                      {problems.find((p) => p.id === s.problem_id)?.title}
+                    </div>
+                    <div className="text-[9px] text-[#404040] uppercase font-bold mt-0.5">
+                      {LANG_LABEL[s.language]} • {s.time_taken || 0}ms
+                    </div>
                   </div>
-                ))
-              )}
+                  <span className="text-[10px] font-medium tabular-nums text-[#404040]">
+                    {fmt(s.submitted_at)}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {selectedCode && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <span
-                  className={`text-xs font-bold px-2 py-1 rounded font-mono ${VERDICT_COLOR[selectedCode.status]}`}
-                >
-                  {VERDICT_SHORT[selectedCode.status]}
+          {selectedCode ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#404040]">
+                  Source_Review
                 </span>
-                <span className="text-sm text-zinc-400">
+                <span className="text-[10px] font-bold text-[#737373] uppercase">
                   {LANG_LABEL[selectedCode.language]}
                 </span>
               </div>
-              <button
-                onClick={() => setSelectedCode(null)}
-                className="text-zinc-500 hover:text-white transition text-xl"
-              >
-                x
-              </button>
+              <div className="bg-[#0a0a0a] border border-[#141414] p-8 min-h-[400px] relative overflow-hidden">
+                <div
+                  className={`absolute top-0 right-0 p-4 text-[10px] font-bold tracking-widest ${VERDICT_STYLE[selectedCode.status]}`}
+                >
+                  {VERDICT_LABEL[selectedCode.status]}
+                </div>
+                {loadingCode ? (
+                  <div className="h-full flex items-center justify-center text-[10px] text-[#222] animate-pulse">
+                    DECRYPTING...
+                  </div>
+                ) : (
+                  <pre className="text-xs font-mono text-[#a3a3a3] leading-relaxed whitespace-pre-wrap">
+                    {selectedCode.code}
+                  </pre>
+                )}
+              </div>
             </div>
-            <div className="flex-1 overflow-auto p-4">
-              {loadingCode ? (
-                <p className="text-zinc-500 text-sm">Loading...</p>
-              ) : (
-                <pre className="text-sm text-zinc-200 font-mono whitespace-pre-wrap">
-                  {selectedCode.code}
-                </pre>
-              )}
+          ) : (
+            <div className="flex items-center justify-center border border-dashed border-[#1a1a1a] rounded-sm text-[10px] text-[#222] uppercase tracking-widest">
+              Select_A_Log_To_View_Source
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </section>
+      </main>
     </div>
   );
 }

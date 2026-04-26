@@ -32,6 +32,7 @@ type SubmissionJob struct {
 type VerdictResult struct {
 	SubmissionID    string                  `json:"submissionId"`
 	RoomCode        string                  `json:"roomCode"`
+	ProblemID       string                  `json:"problemId"`
 	ParticipantName string                  `json:"participantName"`
 	Status          string                  `json:"status"`
 	Score           int                     `json:"score"`
@@ -117,6 +118,7 @@ func (w *Worker) processJob(ctx context.Context, job SubmissionJob) {
 		w.publishVerdict(ctx, VerdictResult{
 			SubmissionID:    job.SubmissionID,
 			RoomCode:        job.RoomCode,
+			ProblemID:       job.ProblemID,
 			ParticipantName: job.ParticipantName,
 			Status:          "runtime_error",
 			Score:           0,

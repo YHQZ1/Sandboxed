@@ -11,30 +11,42 @@ const fmt = (s: number) => {
 export default function Timer() {
   const { timeRemaining, status } = useTimerStore();
 
-  const color =
-    status === "ended"
-      ? "text-red-400"
+  const timerColor =
+    status === "ended" || (status === "active" && timeRemaining < 300)
+      ? "text-[#ef4444]"
       : status === "paused"
-        ? "text-yellow-400"
-        : timeRemaining < 300
-          ? "text-red-400"
-          : "text-white";
+        ? "text-[#737373]"
+        : "text-[#ededed]";
 
   return (
-    <div className={`font-mono text-2xl font-bold tabular-nums ${color}`}>
+    <div className="flex flex-col items-center justify-center font-sans">
       {status === "waiting" && (
-        <span className="text-zinc-500 text-sm font-normal">Not started</span>
-      )}
-      {status === "ended" && (
-        <span className="text-red-400">Contest Ended</span>
-      )}
-      {(status === "active" || status === "paused") && (
-        <span>
-          {fmt(timeRemaining)}
-          {status === "paused" && (
-            <span className="text-yellow-400 text-sm ml-2">PAUSED</span>
-          )}
+        <span className="text-[11px] font-semibold tracking-wider uppercase text-[#737373]">
+          Not started
         </span>
+      )}
+
+      {status === "ended" && (
+        <span className="text-[11px] font-semibold tracking-wider uppercase text-[#ef4444]">
+          Ended
+        </span>
+      )}
+
+      {(status === "active" || status === "paused") && (
+        <div className="flex flex-col items-center">
+          <span
+            className={`text-xl font-medium tabular-nums tracking-tight leading-none ${timerColor}`}
+          >
+            {fmt(timeRemaining)}
+          </span>
+          <span
+            className={`text-[9px] font-semibold tracking-wider uppercase mt-1 ${
+              status === "paused" ? "text-[#737373]" : "text-[#a3a3a3]"
+            }`}
+          >
+            {status === "paused" ? "Paused" : "Remaining"}
+          </span>
+        </div>
       )}
     </div>
   );

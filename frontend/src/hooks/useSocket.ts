@@ -75,6 +75,10 @@ export const useSocket = (
     socket.on("problem_updated", (data: { problem: Problem }) =>
       updateProblem(data.problem),
     );
+    socket.on("kicked", () => {
+      sessionStorage.removeItem(`room:${roomCode}`);
+      window.dispatchEvent(new CustomEvent("dojo:kicked"));
+    });
 
     return () => {
       socket.off("room_joined");
@@ -88,6 +92,9 @@ export const useSocket = (
       socket.off("leaderboard_update");
       socket.off("problem_added");
       socket.off("problem_updated");
+      socket.off('kicked');
+
+      sessionStorage.removeItem(`room:${roomCode}`);
       disconnectSocket();
     };
   }, [

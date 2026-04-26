@@ -3,29 +3,28 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 
-export default function Register() {
+export default function Login() {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleRegister = async () => {
-    if (!name || !email || !password) {
-      setError("All fields are required.");
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("Email and password are required.");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const res = await api.post("/auth/register", { name, email, password });
+      const res = await api.post("/auth/login", { email, password });
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("userId", res.data.user.id);
       localStorage.setItem("hostName", res.data.user.name);
       navigate("/create");
     } catch (err: any) {
-      setError(err.response?.data?.error || "Registration failed.");
+      setError(err.response?.data?.error || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -42,11 +41,10 @@ export default function Register() {
         </button>
 
         <h1 className="text-3xl font-medium tracking-tight text-[#f5f5f5] mb-2">
-          Create an account
+          Host login
         </h1>
         <p className="text-[#a3a3a3] text-sm leading-relaxed mb-8">
-          Only hosts need an account. Participants and viewers join with just a
-          room code and their name.
+          Authenticate to spin up a new contest environment.
         </p>
 
         {error && (
@@ -56,63 +54,47 @@ export default function Register() {
         )}
 
         <div className="flex flex-col gap-5 mb-8">
-          {[
-            {
-              label: "Name",
-              type: "text",
-              placeholder: "Your name",
-              value: name,
-              onChange: setName,
-            },
-            {
-              label: "Email",
-              type: "email",
-              placeholder: "you@example.com",
-              value: email,
-              onChange: setEmail,
-            },
-            {
-              label: "Password",
-              type: "password",
-              placeholder: "••••••••",
-              value: password,
-              onChange: setPassword,
-            },
-          ].map(({ label, type, placeholder, value, onChange }) => (
-            <div key={label} className="flex flex-col gap-2">
-              <label className="text-sm text-[#737373]">{label}</label>
-              <input
-                type={type}
-                placeholder={placeholder}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                onKeyDown={
-                  label === "Password"
-                    ? (e) => e.key === "Enter" && handleRegister()
-                    : undefined
-                }
-                className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
-              />
-            </div>
-          ))}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-[#737373]">Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-[#737373]">Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
+            />
+          </div>
         </div>
 
         <button
-          onClick={handleRegister}
+          onClick={handleLogin}
           disabled={loading}
           className="w-full px-8 py-3.5 text-sm font-medium bg-[#ededed] text-[#0a0a0a] rounded hover:bg-[#d4d4d4] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-6"
         >
-          {loading ? "Creating account..." : "Create account"}
+          {loading ? "Authenticating..." : "Continue"}
         </button>
 
         <div className="text-center">
           <p className="text-sm text-[#737373]">
-            Already have an account?{" "}
+            No account?{" "}
             <button
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/register")}
               className="text-[#ededed] hover:text-[#a3a3a3] transition-colors underline underline-offset-4"
             >
-              Login
+              Register
             </button>
           </p>
         </div>

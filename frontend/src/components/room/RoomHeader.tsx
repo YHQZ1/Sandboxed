@@ -1,26 +1,40 @@
 import Timer from "../timer/Timer";
 import { useRoomStore } from "../../store/roomStore";
 
+const STATUS_LABEL: Record<string, string> = {
+  waiting: "Waiting to start",
+  active: "Contest in progress",
+  paused: "Paused",
+  ended: "Contest ended",
+};
+
 export default function RoomHeader() {
   const { room } = useRoomStore();
   if (!room) return null;
 
   return (
-    <div className="h-14 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-6">
-      <div className="flex items-center gap-3">
-        <span className="font-black text-lg">Dojo</span>
-        <span className="font-semibold">{room.name}</span>
-        <span className="font-mono text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">
+    <header className="flex items-center justify-between px-6 py-3 border-b border-[#262626] bg-[#0a0a0a] flex-shrink-0 z-10 font-sans">
+      <div className="flex items-center gap-4">
+        <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
+          Dojo.
+        </span>
+        <span className="text-[#404040]">/</span>
+        <span className="text-sm font-medium text-[#a3a3a3] truncate max-w-[200px]">
+          {room.name}
+        </span>
+        <span className="text-[10px] uppercase tracking-wider font-semibold bg-[#171717] border border-[#262626] text-[#737373] px-2 py-0.5 rounded-sm">
           {room.code}
         </span>
       </div>
+
       <Timer />
-      <div className="text-xs text-zinc-500 w-32 text-right">
-        {room.status === "waiting" && "Waiting to start"}
-        {room.status === "active" && "Contest in progress"}
-        {room.status === "paused" && "Paused"}
-        {room.status === "ended" && "Contest ended"}
+
+      <div className="text-xs font-medium text-[#737373] flex items-center gap-2">
+        {room.status === "active" && (
+          <span className="w-1.5 h-1.5 rounded-full bg-[#ededed] animate-pulse opacity-80" />
+        )}
+        {STATUS_LABEL[room.status] || "Status unknown"}
       </div>
-    </div>
+    </header>
   );
 }

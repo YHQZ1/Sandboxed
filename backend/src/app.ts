@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes";
 import roomRoutes from "./routes/room.routes";
 import problemRoutes from "./routes/problem.routes";
 import submissionRoutes from "./routes/submission.routes";
+import { runCode } from "./controllers/run.controller";
 
 import { authenticate } from "./middleware/auth.middleware";
 
@@ -56,6 +57,8 @@ app.post("/api/rooms/:code/timer/resume", authenticate, timerResume);
 app.use("/api/submissions", submissionRoutes);
 app.get("/api/rooms/:code/submissions", authenticate, listRoomSubmissions);
 app.get("/api/rooms/:code/submissions/:name", listParticipantSubmissions);
+
+app.post("/api/run", runCode);
 
 startVerdictListener();
 

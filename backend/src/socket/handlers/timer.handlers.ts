@@ -202,4 +202,46 @@ export const registerTimerHandlers = (io: SocketServer, socket: Socket) => {
       }
     },
   );
+
+  socket.on(
+    "timer_end",
+    async ({ roomCode, userId }: { roomCode: string; userId: string }) => {
+      const code = roomCode.toUpperCase();
+      try {
+        const isHost = await verifyRoomHost(code, userId);
+        if (!isHost) {
+          socket.emit("error", { message: "Only hosts can end the contest" });
+          return;
+        }
+
+        if (timerIntervals.has(code)) {
+          clearInterval(timerIntervals.get(code)!);
+          timerIntervals.delete(code);
+        }
+
+        await redis.hset(`room:${code}:timer`, { status: "ended" });
+        await pool.query(`UPDATE rooms SET status = 'ended' WHERE code = $1`, [
+          code,
+        ]);
+
+        const leaderboardRaw = await redis.zrange(
+          `room:${code}:leaderboard`,
+          0,
+          -1,
+          "WITHSCORES",
+        );
+        const leaderboard: any[] = [];
+        for (let i = 0; i < leaderboardRaw.length; i += 2) {
+          leaderboard.push(JSON.parse(leaderboardRaw[i]));
+        }
+
+        io.to(`room:${code}`).emit("contest_ended", {
+          finalLeaderboard: leaderboard,
+        });
+      } catch (err) {
+        console.error("timer_end error:", err);
+        socket.emit("error", { message: "Failed to end contest" });
+      }
+    },
+  );
 };

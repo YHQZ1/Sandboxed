@@ -108,4 +108,15 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
         .emit("problem_updated", { problem });
     },
   );
+
+  socket.on(
+    "kick_participant",
+    async ({ roomCode, name }: { roomCode: string; name: string }) => {
+      const code = roomCode.toUpperCase();
+
+      io.to(`user:${name}:${code}`).emit("kicked");
+
+      io.to(`room:${code}`).emit("participant_left", { name });
+    },
+  );
 };
