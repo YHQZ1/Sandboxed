@@ -72,8 +72,8 @@ export default function ViewerRoom({ code }: Props) {
 
   useEffect(() => {
     const handleKicked = () => setKickedOut(true);
-    window.addEventListener("dojo:kicked", handleKicked);
-    return () => window.removeEventListener("dojo:kicked", handleKicked);
+    window.addEventListener("sandboxed:kicked", handleKicked);
+    return () => window.removeEventListener("sandboxed:kicked", handleKicked);
   }, []);
 
   const selectedProblem =
@@ -85,7 +85,7 @@ export default function ViewerRoom({ code }: Props) {
       <header className="h-14 border-b border-[#262626] flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
         <div className="flex items-center gap-4 min-w-0">
           <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
-            Dojo.
+            Sandboxed.
           </span>
           <div className="h-4 w-px bg-[#262626] hidden sm:block" />
           <span className="text-xs font-medium text-[#737373] truncate max-w-[160px] sm:max-w-[240px]">

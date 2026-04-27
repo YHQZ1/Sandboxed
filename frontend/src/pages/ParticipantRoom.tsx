@@ -180,7 +180,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
   useEffect(() => {
     if (selectedProblemId) {
       const saved = localStorage.getItem(
-        `dojo:v1:${code}:${selectedProblemId}:${language}`,
+        `sandboxed:v1:${code}:${selectedProblemId}:${language}`,
       );
       setCode(saved || DEFAULT_CODE[language]);
     }
@@ -190,7 +190,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
     const timer = setTimeout(() => {
       if (selectedProblemId && code_) {
         localStorage.setItem(
-          `dojo:v1:${code}:${selectedProblemId}:${language}`,
+          `sandboxed:v1:${code}:${selectedProblemId}:${language}`,
           code_,
         );
       }
@@ -245,8 +245,8 @@ export default function ParticipantRoom({ code, socket }: Props) {
       };
       setViolations(detail.count);
     };
-    window.addEventListener("dojo:warning", handleWarning);
-    return () => window.removeEventListener("dojo:warning", handleWarning);
+    window.addEventListener("sandboxed:warning", handleWarning);
+    return () => window.removeEventListener("sandboxed:warning", handleWarning);
   }, []);
 
   useEffect(() => {
@@ -316,8 +316,8 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
       Object.keys(localStorage).forEach((key) => {
         if (
-          key.startsWith(`dojo:v1:${code}:`) ||
-          key.startsWith(`dojo:solved:`)
+          key.startsWith(`sandboxed:v1:${code}:`) ||
+          key.startsWith(`sandboxed:solved:`)
         ) {
           localStorage.removeItem(key);
         }
@@ -325,14 +325,14 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
       sessionStorage.removeItem(`room:${code}`);
     };
-    window.addEventListener("dojo:kicked", handleKicked);
-    return () => window.removeEventListener("dojo:kicked", handleKicked);
+    window.addEventListener("sandboxed:kicked", handleKicked);
+    return () => window.removeEventListener("sandboxed:kicked", handleKicked);
   }, [code]);
 
   useEffect(() => {
     if (problems.length > 0) {
       problems.forEach((p) => {
-        if (localStorage.getItem(`dojo:solved:${p.id}`))
+        if (localStorage.getItem(`sandboxed:solved:${p.id}`))
           markProblemSolved(p.id);
       });
     }

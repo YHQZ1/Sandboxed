@@ -30,7 +30,7 @@ func RunSubmission(
 		ExpectedOutput string
 	},
 ) ([]TestCaseResult, error) {
-	dir, err := os.MkdirTemp("", "dojo-*")
+	dir, err := os.MkdirTemp("/tmp", "sandboxed-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -50,7 +50,7 @@ func RunSubmission(
 }
 
 func RunDirect(language string, code string, input string, timeLimit int, memoryLimit int) (string, string, error) {
-	dir, err := os.MkdirTemp("", "dojo-run-*")
+	dir, err := os.MkdirTemp("/tmp", "sandboxed-run-*")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -173,11 +173,11 @@ func runInDocker(dir, language, input, expectedOutput, testCaseID string, timeLi
 
 func dockerImage(language string) string {
 	images := map[string]string{
-		"python":     "dojo-sandbox-python:latest",
-		"javascript": "dojo-sandbox-javascript:latest",
-		"cpp":        "dojo-sandbox-cpp:latest",
-		"c":          "dojo-sandbox-c:latest",
-		"java":       "dojo-sandbox-java:latest",
+		"python":     "sandboxed-sandbox-python:latest",
+		"javascript": "sandboxed-sandbox-javascript:latest",
+		"cpp":        "sandboxed-sandbox-cpp:latest",
+		"c":          "sandboxed-sandbox-c:latest",
+		"java":       "sandboxed-sandbox-java:latest",
 	}
 	return images[language]
 }

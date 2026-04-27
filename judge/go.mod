@@ -1,4 +1,4 @@
-module github.com/YHQZ1/dojo/judge
+module github.com/YHQZ1/sandboxed/judge
 
 go 1.23
 

@@ -153,13 +153,13 @@ export const useSocket = (
     });
 
     socket.on("violation_warning", (data: { count: number; max: number }) => {
-      window.dispatchEvent(new CustomEvent("dojo:warning", { detail: data }));
+      window.dispatchEvent(new CustomEvent("sandboxed:warning", { detail: data }));
     });
 
     socket.on("kicked", (data: { reason?: string } = {}) => {
       sessionStorage.removeItem(`room:${roomCode}`);
       window.dispatchEvent(
-        new CustomEvent("dojo:kicked", { detail: data.reason || "" }),
+        new CustomEvent("sandboxed:kicked", { detail: data.reason || "" }),
       );
     });
 
@@ -167,14 +167,14 @@ export const useSocket = (
       sessionStorage.removeItem(`room:${roomCode}`);
       Object.keys(localStorage).forEach((key) => {
         if (
-          key.startsWith(`dojo:v1:${roomCode}:`) ||
-          key.startsWith(`dojo:solved:`)
+          key.startsWith(`sandboxed:v1:${roomCode}:`) ||
+          key.startsWith(`sandboxed:solved:`)
         ) {
           localStorage.removeItem(key);
         }
       });
       window.dispatchEvent(
-        new CustomEvent("dojo:kicked", {
+        new CustomEvent("sandboxed:kicked", {
           detail: data.message || "You have been banned from this room.",
         }),
       );

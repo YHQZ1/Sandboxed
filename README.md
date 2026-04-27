@@ -1,6 +1,6 @@
 <div align="center">
 
-# Dojo
+# Sandboxed
 
 **A self-hosted competitive coding platform built for recruiting programmers.**
 
@@ -20,7 +20,7 @@ Run your own contests. Judge code in real time. Find your best.
 
 ## Table of Contents
 
-- [What is Dojo?](#what-is-dojo)
+- [What is Sandboxed?](#what-is-sandboxed)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Services](#services)
@@ -38,9 +38,9 @@ Run your own contests. Judge code in real time. Find your best.
 
 ---
 
-## What is Dojo?
+## What is Sandboxed?
 
-Dojo is a self-hosted, invite-only coding contest platform built for recruiting competitive programmers. Instead of sending candidates to LeetCode or HackerRank, you run your own contest on your own platform — with your own problems, your own rules, and full visibility into every submission.
+Sandboxed is a self-hosted, invite-only coding contest platform built for recruiting competitive programmers. Instead of sending candidates to LeetCode or HackerRank, you run your own contest on your own platform — with your own problems, your own rules, and full visibility into every submission.
 
 A host creates a room and gets a unique room code to share. Candidates join as participants, co-recruiters join as hosts, and anyone else can watch as a viewer. The host posts problems, starts a timer, and watches the live leaderboard update in real time as participants submit code.
 
@@ -104,47 +104,49 @@ Participants and viewers are sessionless — no account required. Their identity
 
 ## Architecture
 
-Dojo runs as three independently deployed processes: a React frontend, a Node.js backend, and a Go judge service. The backend is the central coordinator — it owns the REST API, the WebSocket layer, and all state in PostgreSQL and Redis. The judge service is a stateless HTTP worker that receives submissions, executes them in isolated Docker containers, and publishes verdicts back via Redis Pub/Sub.
+Sandboxed runs as three independently deployed processes: a React frontend, a Node.js backend, and a Go judge service. The backend is the central coordinator — it owns the REST API, the WebSocket layer, and all state in PostgreSQL and Redis. The judge service is a stateless HTTP worker that receives submissions, executes them in isolated Docker containers, and publishes verdicts back via Redis Pub/Sub.
 
 ```
+
 +------------------------------------------+
-|            React Frontend                |
-|   Monaco Editor · Socket.io client       |
+| React Frontend |
+| Monaco Editor · Socket.io client |
 +----------------+---------------+---------+
-                 | REST          | WebSocket
-                 v               v
+| REST | WebSocket
+v v
 +------------------------------------------+
-|      Node.js + Express + TypeScript      |
-|    Auth · Rooms · Problems · Socket      |
+| Node.js + Express + TypeScript |
+| Auth · Rooms · Problems · Socket |
 +-----------+------------------------------+
-            |                  |
-            v                  v
-+----------------+    +--------------------+
-|  PostgreSQL    |    |       Redis        |
-|  (Persistent)  |    | Room State · Timer |
-|                |    | Cache · Pub/Sub    |
-+----------------+    +--------+-----------+
-                               |
-                     HTTP /submit
-                               v
-                      +------------------+
-                      |  Judge Service   |
-                      |      (Go)        |
-                      |  Docker Sandbox  |
-                      +--------+---------+
-                               |
-                     Verdict via Redis Pub/Sub
-                               v
-                      +------------------+
-                      |    Backend       |
-                      | verdict.listener |
-                      +--------+---------+
-                               |
-                     WebSocket push to room
-                               v
-                      +------------------+
-                      |    Frontend      |
-                      +------------------+
+| |
+v v
++----------------+ +--------------------+
+| PostgreSQL | | Redis |
+| (Persistent) | | Room State · Timer |
+| | | Cache · Pub/Sub |
++----------------+ +--------+-----------+
+|
+HTTP /submit
+v
++------------------+
+| Judge Service |
+| (Go) |
+| Docker Sandbox |
++--------+---------+
+|
+Verdict via Redis Pub/Sub
+v
++------------------+
+| Backend |
+| verdict.listener |
++--------+---------+
+|
+WebSocket push to room
+v
++------------------+
+| Frontend |
++------------------+
+
 ```
 
 ### Submission Flow
@@ -163,20 +165,22 @@ Dojo runs as three independently deployed processes: a React frontend, a Node.js
 ### Timer Flow
 
 ```
-Host clicks Start  ->  server-side interval begins, ticking every second
-                       timer state stored in Redis, SQL set to "active"
-                       every second -> timer_tick broadcast to entire room
 
-Host clicks Pause  ->  elapsed time calculated and stored in Redis
-                       interval cleared, SQL status set to "paused"
+Host clicks Start -> server-side interval begins, ticking every second
+timer state stored in Redis, SQL set to "active"
+every second -> timer_tick broadcast to entire room
 
-Host clicks Resume ->  recalculates startedAt, resumes interval
-                       Redis and SQL updated to "active"
+Host clicks Pause -> elapsed time calculated and stored in Redis
+interval cleared, SQL status set to "paused"
+
+Host clicks Resume -> recalculates startedAt, resumes interval
+Redis and SQL updated to "active"
 
 Timer hits 0 (or Host ends early)
-                   ->  interval cleared, room status set to "ended"
-                       final leaderboard fetched and broadcast
-                       no more submissions accepted
+-> interval cleared, room status set to "ended"
+final leaderboard fetched and broadcast
+no more submissions accepted
+
 ```
 
 ---
@@ -207,26 +211,28 @@ A stateless HTTP worker. Receives a submission payload (code, language, test cas
 ## Contest Flow
 
 ```
+
 Host creates room
-      |
+|
 Gets room code -> shares with candidates (Participant),
-                  co-recruiters (Host), observers (Viewer)
-      |
+co-recruiters (Host), observers (Viewer)
+|
 Everyone joins -> picks name + role + enters code
-      |
+|
 Host posts problems with visible sample + hidden judge test cases
-      |
+|
 Host starts timer
-      |
+|
 Participants write code, run against samples, then submit
-      |
+|
 Judge sandboxes and executes code against all hidden test cases
-      |
+|
 Verdict returned -> leaderboard updates live for everyone in the room
-      |
+|
 Timer ends (or host ends early) -> room locked -> no more submissions
-      |
+|
 Hosts review every candidate's submissions, code, and per-test-case results
+
 ```
 
 ---
@@ -543,7 +549,7 @@ During an active contest, participants are subject to the following controls:
 ## Project Structure
 
 ```
-dojo/
+sandboxed/
 |
 +-- frontend/
 |   +-- src/
@@ -630,8 +636,8 @@ dojo/
 ### Clone & Run
 
 ```bash
-git clone https://github.com/yourusername/dojo.git
-cd dojo
+git clone https://github.com/yourusername/sandboxed.git
+cd sandboxed
 
 # Build sandbox images (required once — pulls base images and installs compilers)
 sh scripts/build-sandboxes.sh
@@ -673,7 +679,7 @@ Database migrations are applied automatically on first run.
 
 ```env
 PORT=4000
-DATABASE_URL=postgresql://dojo:dojo@postgres:5432/dojo
+DATABASE_URL=postgresql://sandboxed:sandboxed@postgres:5432/sandboxed
 REDIS_URL=redis://redis:6379
 JWT_SECRET=change-this-to-a-long-random-secret
 JUDGE_URL=http://judge:5001

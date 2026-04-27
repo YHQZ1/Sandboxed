@@ -28,7 +28,7 @@ export default function RoomHeader() {
     <header className="flex items-center justify-between px-6 py-3 border-b border-[#262626] bg-[#0a0a0a] flex-shrink-0 z-10">
       <div className="flex items-center gap-4">
         <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
-          Dojo.
+          Sandboxed.
         </span>
         <span className="text-[#404040]">/</span>
         <span className="text-sm font-medium text-[#a3a3a3] truncate max-w-[200px]">

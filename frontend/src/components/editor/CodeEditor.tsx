@@ -17,7 +17,7 @@ interface Props {
 }
 
 const defineTheme = (monaco: Monaco) => {
-  monaco.editor.defineTheme("dojo-dark", {
+  monaco.editor.defineTheme("sandboxed-dark", {
     base: "vs-dark",
     inherit: true,
     rules: [],
@@ -54,7 +54,7 @@ export default function CodeEditor({
         height="100%"
         language={MONACO_LANG[language]}
         value={value}
-        theme="dojo-dark"
+        theme="sandboxed-dark"
         beforeMount={defineTheme}
         onMount={handleEditorMount}
         onChange={(v) => onChange(v || "")}

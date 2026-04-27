@@ -156,7 +156,7 @@ export default function HostRoom({ code, socket }: Props) {
       <header className="flex items-center justify-between px-6 py-3 border-b border-[#262626] flex-shrink-0">
         <div className="flex items-center gap-4 min-w-0">
           <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
-            Dojo.
+            Sandboxed.
           </span>
           <span className="text-[#404040] hidden sm:inline">/</span>
           <span className="text-sm font-medium text-[#a3a3a3] truncate max-w-[160px] sm:max-w-[240px]">

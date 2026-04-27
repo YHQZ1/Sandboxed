@@ -62,7 +62,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
     set((s) => {
       const updated = new Set(s.solvedProblemIds);
       updated.add(problemId);
-      localStorage.setItem(`dojo:solved:${problemId}`, "1");
+      localStorage.setItem(`sandboxed:solved:${problemId}`, "1");
       return { solvedProblemIds: updated };
     }),
   reset: () =>

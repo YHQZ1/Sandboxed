@@ -7,7 +7,7 @@ export default function Home() {
     <div className="min-h-screen bg-[#0a0a0a] text-[#ededed] font-sans flex flex-col justify-center items-center px-6 selection:bg-[#262626] selection:text-[#ededed]">
       <div className="max-w-xl w-full flex flex-col items-center text-center">
         <h1 className="text-7xl md:text-9xl font-medium tracking-tighter mb-6 text-[#f5f5f5]">
-          Dojo.
+          Sandboxed.
         </h1>
 
         <p className="text-[#a3a3a3] text-lg mb-12 max-w-md leading-relaxed">

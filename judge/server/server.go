@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/YHQZ1/dojo/judge/runner"
+	"github.com/YHQZ1/sandboxed/judge/runner"
 	"github.com/redis/go-redis/v9"
 )
 

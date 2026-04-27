@@ -3,26 +3,26 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: dojo_postgres
+    container_name: sandboxed_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dojo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dojo}
-      POSTGRES_DB: ${POSTGRES_DB:-dojo}
+      POSTGRES_USER: ${POSTGRES_USER:-sandboxed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sandboxed}
+      POSTGRES_DB: ${POSTGRES_DB:-sandboxed}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dojo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sandboxed}"]
       interval: 5s
       timeout: 3s
       retries: 5
     networks:
-      - dojo-net
+      - sandboxed-net
 
   redis:
     image: redis:7-alpine
-    container_name: dojo_redis
+    container_name: sandboxed_redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -30,20 +30,20 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - dojo-net
+      - sandboxed-net
 
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: dojo_backend
+    container_name: sandboxed_backend
     restart: unless-stopped
     ports:
       - "4000:4000"
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-dojo}:${POSTGRES_PASSWORD:-dojo}@postgres:5432/${POSTGRES_DB:-dojo}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sandboxed}:${POSTGRES_PASSWORD:-sandboxed}@postgres:5432/${POSTGRES_DB:-sandboxed}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       JUDGE_URL: http://judge:5001
@@ -54,13 +54,13 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - dojo-net
+      - sandboxed-net
 
   judge:
     build:
       context: ../judge
       dockerfile: Dockerfile
-    container_name: dojo_judge
+    container_name: sandboxed_judge
     restart: unless-stopped
     ports:
       - "5001:5001"
@@ -70,13 +70,14 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock   # required for sandbox containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
     networks:
-      - dojo-net
+      - sandboxed-net
 
 volumes:
   postgres_data:
 
 networks:
-  dojo-net:
+  sandboxed-net:
     driver: bridge

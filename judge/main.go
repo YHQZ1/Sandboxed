@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/YHQZ1/dojo/judge/config"
-	"github.com/YHQZ1/dojo/judge/server"
+	"github.com/YHQZ1/sandboxed/judge/config"
+	"github.com/YHQZ1/sandboxed/judge/server"
 	"github.com/redis/go-redis/v9"
 )
 

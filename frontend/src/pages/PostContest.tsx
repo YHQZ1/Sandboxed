@@ -240,7 +240,7 @@ export default function PostContest() {
       <header className="border-b border-[#262626] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-sm z-30">
         <div className="flex items-center gap-4">
           <span className="text-lg font-medium tracking-tight text-[#f5f5f5]">
-            Dojo.
+            Sandboxed.
           </span>
           <div className="h-4 w-px bg-[#262626]" />
           <span className="text-xs font-medium text-[#737373] uppercase tracking-wide">
