@@ -73,7 +73,7 @@ export default function PostContest() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const participantName = searchParams.get("name") || "";
+  const participantName = searchParams.get("name")?.trim() || "";
   const isHost = !participantName;
 
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -296,6 +296,16 @@ export default function PostContest() {
                     </p>
                     <p className="text-2xl font-medium tabular-nums">
                       {myStats.solvedCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#737373] uppercase tracking-widest mb-1">
+                      Rank
+                    </p>
+                    <p className="text-2xl font-medium tabular-nums">
+                      {participants.findIndex(
+                        (p) => p.name === participantName,
+                      ) + 1 || "—"}
                     </p>
                   </div>
                   <div>

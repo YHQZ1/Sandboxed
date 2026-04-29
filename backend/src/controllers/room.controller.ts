@@ -143,8 +143,14 @@ export const getLeaderboard = async (
 ): Promise<void> => {
   const { code } = req.params;
   try {
+    const metaKey = `room:${code}:leaderboard:meta`;
     const raw = await redis.zrevrange(`room:${code}:leaderboard`, 0, -1);
-    const leaderboard = raw.map((entry) => JSON.parse(entry as string));
+    const leaderboard = await Promise.all(
+      raw.map(async (name) => {
+        const meta = await redis.hget(metaKey, name);
+        return meta ? JSON.parse(meta) : { name, score: 0, solvedCount: 0 };
+      }),
+    );
     res.json({ leaderboard });
   } catch {
     res.status(500).json({ error: "Internal server error" });

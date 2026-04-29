@@ -15,17 +15,24 @@ interface LeaderboardEntry {
 const getRoomLeaderboard = async (
   code: string,
 ): Promise<LeaderboardEntry[]> => {
+  const metaKey = `room:${code}:leaderboard:meta`;
   const raw = await redis.zrange(
     `room:${code}:leaderboard`,
     0,
     -1,
     "WITHSCORES",
   );
-  const leaderboard: LeaderboardEntry[] = [];
-  for (let i = 0; i < raw.length; i += 2) {
-    leaderboard.push(JSON.parse(raw[i]) as LeaderboardEntry);
-  }
-  return leaderboard;
+  const names: string[] = [];
+  for (let i = 0; i < raw.length; i += 2) names.push(raw[i]);
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const meta = await redis.hget(metaKey, name);
+      return meta
+        ? (JSON.parse(meta) as LeaderboardEntry)
+        : { name, score: 0, solvedCount: 0, lastAcceptedAt: null };
+    }),
+  );
+  return entries;
 };
 
 const endContest = async (code: string, io: SocketServer) => {

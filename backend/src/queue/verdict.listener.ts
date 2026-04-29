@@ -14,41 +14,42 @@ interface LeaderboardEntry {
 const getLeaderboard = async (
   roomCode: string,
 ): Promise<LeaderboardEntry[]> => {
-  const raw = await redis.zrange(
-    `room:${roomCode}:leaderboard`,
-    0,
-    -1,
-    "WITHSCORES",
+  const metaKey = `room:${roomCode}:leaderboard:meta`;
+  const names = await redis.zrevrange(`room:${roomCode}:leaderboard`, 0, -1);
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const meta = await redis.hget(metaKey, name);
+      return meta
+        ? (JSON.parse(meta) as LeaderboardEntry)
+        : { name, score: 0, solvedCount: 0, lastAcceptedAt: null };
+    }),
   );
-  const leaderboard: LeaderboardEntry[] = [];
-  for (let i = 0; i < raw.length; i += 2) {
-    leaderboard.push(JSON.parse(raw[i]) as LeaderboardEntry);
-  }
-  return leaderboard;
+  return entries;
 };
 
 const recoverStuckSubmissions = async () => {
   try {
     const result = await pool.query(
-      `SELECT s.*, p.time_limit, p.memory_limit,
-         json_agg(json_build_object(
-           'id', tc.id,
-           'input', tc.input,
-           'expected_output', tc.expected_output
-         ) ORDER BY tc.order_index) as test_cases
-       FROM submissions s
-       JOIN problems p ON p.id = s.problem_id
-       LEFT JOIN test_cases tc ON tc.problem_id = p.id
-       WHERE s.status = 'judging'
-         AND s.submitted_at < NOW() - INTERVAL '2 minutes'
-       GROUP BY s.id, p.time_limit, p.memory_limit
-       LIMIT 10`,
+      `SELECT s.*, p.time_limit, p.memory_limit, r.code as room_code,
+     json_agg(json_build_object(
+       'id', tc.id,
+       'input', tc.input,
+       'expected_output', tc.expected_output
+     ) ORDER BY tc.order_index) as test_cases
+   FROM submissions s
+   JOIN problems p ON p.id = s.problem_id
+   JOIN rooms r ON r.id = s.room_id
+   LEFT JOIN test_cases tc ON tc.problem_id = p.id
+   WHERE s.status = 'judging'
+     AND s.submitted_at < NOW() - INTERVAL '2 minutes'
+   GROUP BY s.id, p.time_limit, p.memory_limit, r.code
+   LIMIT 10`,
     );
 
     for (const row of result.rows) {
       await enqueueSubmission({
         submissionId: row.id,
-        roomCode: "",
+        roomCode: row.room_code,
         problemId: row.problem_id,
         participantName: row.participant_name,
         language: row.language,
@@ -111,13 +112,6 @@ export const startVerdictListener = () => {
         results,
         problemId,
       } = verdict;
-
-      await pool.query(
-        `UPDATE submissions 
-         SET status = $1, score = $2, time_taken = $3, memory_used = $4
-         WHERE id = $5`,
-        [status, score, timeTaken, memoryUsed, submissionId],
-      );
 
       if (results?.length) {
         for (const r of results) {

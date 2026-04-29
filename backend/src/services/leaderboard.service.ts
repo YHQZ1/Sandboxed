@@ -12,13 +12,12 @@ export const updateLeaderboard = async (
   participantName: string,
   newScore: number,
   submissionId: string,
-  problemId: string, // ADD THIS
+  problemId: string,
 ): Promise<void> => {
-  // dedup by participant+problem, not submissionId
   const solvedKey = `room:${roomCode}:solved`;
   const solvedMember = `${participantName}:${problemId}`;
   const alreadySolved = await redis.sismember(solvedKey, solvedMember);
-  if (alreadySolved) return; // already got points for this problem
+  if (alreadySolved) return;
 
   const metaKey = `room:${roomCode}:leaderboard:meta`;
   const existing = await redis.hget(metaKey, participantName);
@@ -34,11 +33,11 @@ export const updateLeaderboard = async (
   await redis
     .multi()
     .hset(metaKey, participantName, JSON.stringify(meta))
-    .sadd(solvedKey, solvedMember) // track by participant:problemId
+    .sadd(solvedKey, solvedMember)
     .zadd(
       `room:${roomCode}:leaderboard`,
       meta.score * 1e10 - Math.floor(Date.now() / 1000),
-      JSON.stringify(meta),
+      participantName,
     )
     .exec();
 };
@@ -46,11 +45,29 @@ export const updateLeaderboard = async (
 export const getLeaderboard = async (
   roomCode: string,
 ): Promise<LeaderboardEntry[]> => {
+  const metaKey = `room:${roomCode}:leaderboard:meta`;
   const raw = await redis.zrevrange(`room:${roomCode}:leaderboard`, 0, -1);
-  return raw.map((entry) => JSON.parse(entry) as LeaderboardEntry);
+  const entries = await Promise.all(
+    raw.map(async (name) => {
+      const meta = await redis.hget(metaKey, name);
+      return meta
+        ? (JSON.parse(meta) as LeaderboardEntry)
+        : { name, score: 0, solvedCount: 0, lastAcceptedAt: null };
+    }),
+  );
+  return entries;
 };
 
 export const getLeaderboardFromRedis = async (roomCode: string) => {
+  const metaKey = `room:${roomCode}:leaderboard:meta`;
   const raw = await redis.zrevrange(`room:${roomCode}:leaderboard`, 0, -1);
-  return raw.map((entry) => JSON.parse(entry));
+  const entries = await Promise.all(
+    raw.map(async (name) => {
+      const meta = await redis.hget(metaKey, name);
+      return meta
+        ? JSON.parse(meta)
+        : { name, score: 0, solvedCount: 0, lastAcceptedAt: null };
+    }),
+  );
+  return entries;
 };

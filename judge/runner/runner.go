@@ -44,6 +44,9 @@ func RunSubmission(
 	for _, tc := range testCases {
 		result := runInDocker(dir, language, tc.Input, tc.ExpectedOutput, tc.ID, timeLimit, memoryLimit)
 		results = append(results, result)
+		if result.Status == "compilation_error" {
+			break
+		}
 	}
 
 	return results, nil

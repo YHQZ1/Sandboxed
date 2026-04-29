@@ -18,5 +18,8 @@ export const connectSocket = (): Socket => {
 };
 
 export const disconnectSocket = () => {
-  if (socket?.connected) socket.disconnect();
+  if (socket?.connected) {
+    socket.disconnect();
+    socket = null;
+  }
 };

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect } from "react";
 import { connectSocket, disconnectSocket, getSocket } from "../socket/socket";
 import { useRoomStore } from "../store/roomStore";
@@ -202,22 +203,7 @@ export const useSocket = (
       socket.off("banned");
       disconnectSocket();
     };
-  }, [
-    roomCode,
-    name,
-    role,
-    setRoom,
-    setProblems,
-    setParticipants,
-    setLeaderboard,
-    setDuration,
-    setTimer,
-    addParticipant,
-    removeParticipant,
-    addProblem,
-    updateProblem,
-    updateRoomStatus,
-  ]);
+  }, [roomCode, name, role]);
 
   return getSocket();
 };

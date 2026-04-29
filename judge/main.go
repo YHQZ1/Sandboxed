@@ -41,4 +41,7 @@ func main() {
 
 	log.Println("Shutting down judge...")
 	srv.Shutdown(context.Background())
+	if err := redisClient.Close(); err != nil {
+		log.Printf("Redis close error: %v", err)
+	}
 }

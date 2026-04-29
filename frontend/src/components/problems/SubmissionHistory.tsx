@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import api from "../../lib/api";
@@ -91,7 +92,7 @@ export default function SubmissionHistory({
     } finally {
       setLoading(false);
     }
-  }, [roomCode, participantName, role, problemId, setGlobalSubmissions]);
+  }, [roomCode, participantName, role, problemId]);
 
   useEffect(() => {
     fetchSubmissions();

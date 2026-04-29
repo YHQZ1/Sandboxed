@@ -29,6 +29,25 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
         const code = roomCode;
         const room = await getRoomByCode(code);
 
+        if (room.status === "ended" && role !== "host") {
+          const metaKey = `room:${code}:leaderboard:meta`;
+          const leaderboardNames = await redis.zrevrange(
+            `room:${code}:leaderboard`,
+            0,
+            -1,
+          );
+          const finalLeaderboard: LeaderboardEntry[] = await Promise.all(
+            leaderboardNames.map(async (n) => {
+              const meta = await redis.hget(metaKey, n);
+              return meta
+                ? (JSON.parse(meta) as LeaderboardEntry)
+                : { name: n, score: 0, solvedCount: 0, lastAcceptedAt: null };
+            }),
+          );
+          socket.emit("contest_ended", { finalLeaderboard });
+          return;
+        }
+
         if (deviceId && role === "participant") {
           const banned = await redis.sismember(
             `room:${code}:banned_devices`,
@@ -40,7 +59,6 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
             });
             return;
           }
-          // store device ID mapped to participant name
           await redis.hset(`room:${code}:device_ids`, name, deviceId);
         }
 
@@ -57,12 +75,6 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
         const participantsRaw = await redis.hgetall(
           `room:${code}:participants`,
         );
-        const leaderboardRaw = await redis.zrange(
-          `room:${code}:leaderboard`,
-          0,
-          -1,
-          "WITHSCORES",
-        );
 
         const participants = Object.entries(participantsRaw || {}).map(
           ([n, v]) => ({
@@ -71,10 +83,20 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
           }),
         );
 
-        const leaderboard: LeaderboardEntry[] = [];
-        for (let i = 0; i < leaderboardRaw.length; i += 2) {
-          leaderboard.push(JSON.parse(leaderboardRaw[i]) as LeaderboardEntry);
-        }
+        const metaKey = `room:${code}:leaderboard:meta`;
+        const leaderboardNames = await redis.zrevrange(
+          `room:${code}:leaderboard`,
+          0,
+          -1,
+        );
+        const leaderboard: LeaderboardEntry[] = await Promise.all(
+          leaderboardNames.map(async (n) => {
+            const meta = await redis.hget(metaKey, n);
+            return meta
+              ? (JSON.parse(meta) as LeaderboardEntry)
+              : { name: n, score: 0, solvedCount: 0, lastAcceptedAt: null };
+          }),
+        );
 
         const problems =
           role === "host"
@@ -107,8 +129,8 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
   });
 
   socket.on("disconnecting", () => {
-    const { roomCode, name } = socket.data;
-    if (roomCode && name) {
+    const { roomCode, name, role } = socket.data;
+    if (roomCode && name && role !== "host") {
       socket.to(`room:${roomCode}`).emit("participant_left", { name });
     }
   });
@@ -131,6 +153,10 @@ export const registerRoomHandlers = (io: SocketServer, socket: Socket) => {
     "kick_participant",
     async ({ roomCode, name }: { roomCode: string; name: string }) => {
       const code = roomCode;
+      if (socket.data.role !== "host" || socket.data.roomCode !== code) {
+        socket.emit("error", { message: "Only hosts can kick participants" });
+        return;
+      }
       io.to(`user:${name}:${code}`).emit("kicked");
       io.to(`room:${code}`).emit("participant_left", { name });
     },

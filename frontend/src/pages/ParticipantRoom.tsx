@@ -187,6 +187,10 @@ export default function ParticipantRoom({ code, socket }: Props) {
         `sandboxed:v1:${code}:${selectedProblemId}:${language}`,
       );
       setCode(saved || DEFAULT_CODE[language]);
+      setShowOutput(false);
+      setShowTestCases(false);
+      setRunResults([]);
+      setTestCaseResults([]);
     }
   }, [selectedProblemId, language, code]);
 
@@ -460,6 +464,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
     if (!selectedProblem || !code_ || running) return;
     setRunning(true);
     setShowOutput(true);
+    setShowTestCases(false);
     const sampleCases =
       selectedProblem.test_cases?.filter((tc) => tc.is_sample) || [];
     try {
@@ -519,7 +524,6 @@ export default function ParticipantRoom({ code, socket }: Props) {
   const handleEndTest = () => {
     setTestEnded(true);
     setShowEndTestConfirm(false);
-    sessionStorage.removeItem(`room:${code}`);
     if (document.fullscreenElement) document.exitFullscreen();
   };
 
@@ -546,7 +550,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
           </p>
           {violations > 0 && (
             <p className="text-xs text-[#ef4444] mt-2">
-              Warnings: {violations} / 4
+              Warnings: {violations} / 3
             </p>
           )}
         </div>
@@ -610,9 +614,10 @@ export default function ParticipantRoom({ code, socket }: Props) {
       )}
 
       {testEnded && (
-        <div className="h-10 bg-[#171717] border-b border-[#262626] flex items-center justify-center flex-shrink-0">
+        <div className="h-10 bg-[#171717] border-b border-[#262626] flex items-center justify-center gap-3 flex-shrink-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#737373] animate-pulse" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#737373]">
-            Test ended — your submissions have been saved
+            You have ended your test — waiting for contest to finish
           </span>
         </div>
       )}

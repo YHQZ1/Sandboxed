@@ -1,8 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useRoomStore } from "../store/roomStore";
-import { useTimerStore } from "../store/timerStore";
 import { useSocket } from "../hooks/useSocket";
 import HostRoom from "./HostRoom";
 import ParticipantRoom from "./ParticipantRoom";
@@ -19,11 +17,10 @@ export default function Room() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setMyIdentity } = useRoomStore();
-  const { status: timerStatus } = useTimerStore();
 
-  const [roomStatus, setRoomStatus] = useState<
-    "loading" | "ok" | "not_found" | "ended"
-  >("loading");
+  const [roomStatus, setRoomStatus] = useState<"loading" | "ok" | "not_found">(
+    "loading",
+  );
 
   const [state] = useState<RoomState>(() => {
     const rawState = location.state as RoomState;
@@ -58,7 +55,10 @@ export default function Room() {
     const onJoined = () => setRoomStatus("ok");
     const onNotFound = () => setRoomStatus("not_found");
     const onEnded = () => {
-      if (stateRef.current?.role !== "host") {
+      if (stateRef.current?.role === "host") {
+        setRoomStatus("ok");
+      } else {
+        sessionStorage.removeItem(`room:${code}`);
         navigate(
           `/results/${code}?name=${encodeURIComponent(stateRef.current?.name || "")}`,
           { replace: true },
@@ -77,14 +77,7 @@ export default function Room() {
     };
   }, [socket]);
 
-  useEffect(() => {
-    if (timerStatus === "ended" && stateRef.current?.role === "host") {
-      setRoomStatus("ok");
-    }
-  }, [timerStatus]);
-
   if (roomStatus === "not_found") return <NotFound forceVariant="no-contest" />;
-  if (roomStatus === "ended") return <NotFound forceVariant="contest-ended" />;
 
   if (roomStatus === "loading") {
     return (

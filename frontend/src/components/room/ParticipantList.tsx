@@ -19,12 +19,13 @@ export default function ParticipantList({ showKick, hostCode, socket }: Props) {
 
   const handleKick = async (name: string) => {
     if (!hostCode) return;
+    if (!window.confirm(`Remove ${name} from the contest?`)) return;
     try {
       await api.delete(`/rooms/${hostCode}/participants/${name}`);
       removeParticipant(name);
       socket?.emit("kick_participant", { roomCode: hostCode, name });
     } catch {
-      // silently ignore failure – the UI already updates optimistically
+      // silently ignore
     }
   };
 
