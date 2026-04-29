@@ -1,16 +1,20 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useRoomStore } from "../store/roomStore";
 import { useSocket } from "../hooks/useSocket";
 import HostRoom from "./HostRoom";
 import ParticipantRoom from "./ParticipantRoom";
 import ViewerRoom from "./ViewerRoom";
+import NotFound from "./NotFound";
 
 export default function Room() {
   const { code } = useParams<{ code: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { setMyIdentity } = useRoomStore();
+  const [roomStatus, setRoomStatus] = useState<
+    "loading" | "ok" | "not_found" | "ended"
+  >("loading");
 
   const state = useMemo(() => {
     const rawState = location.state as {
@@ -44,6 +48,25 @@ export default function Room() {
   }, [code, state?.name, state?.role, navigate, setMyIdentity]);
 
   const socket = useSocket(code!, state?.name || "", state?.role || "viewer");
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("room_joined", () => setRoomStatus("ok"));
+    socket.on("room_not_found", () => setRoomStatus("not_found"));
+    socket.on("contest_ended", () => setRoomStatus("ended"));
+    socket.on("kicked", () => navigate("/join"));
+
+    return () => {
+      socket.off("room_joined");
+      socket.off("room_not_found");
+      socket.off("contest_ended");
+      socket.off("kicked");
+    };
+  }, [socket, navigate]);
+
+  if (roomStatus === "not_found") return <NotFound forceVariant="no-contest" />;
+  if (roomStatus === "ended") return <NotFound forceVariant="contest-ended" />;
 
   if (!state?.name) {
     return (

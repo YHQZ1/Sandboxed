@@ -6,6 +6,7 @@ import CreateRoom from "./pages/CreateRoom";
 import JoinRoom from "./pages/JoinRoom";
 import Room from "./pages/Room";
 import PostContest from "./pages/PostContest";
+import NotFound from "./pages/NotFound";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -51,6 +52,7 @@ function App() {
           <Route path="/join" element={<JoinRoom />} />
           <Route path="/results/:code" element={<PostContest />} />
           <Route path="/room/:code" element={<Room />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>
