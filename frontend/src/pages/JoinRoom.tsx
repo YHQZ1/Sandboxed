@@ -28,16 +28,28 @@ export default function JoinRoom() {
     try {
       if (role === "host") {
         const loginRes = await api.post("/auth/login", { email, password });
-        localStorage.setItem("token", loginRes.data.token);
+        const token = loginRes.data.token;
+
+        localStorage.setItem("token", token);
         localStorage.setItem("userId", loginRes.data.user.id);
         localStorage.setItem("hostName", loginRes.data.user.name);
+
+        await api.post(`/rooms/${code.toLowerCase()}/join`, { name, role });
+
+        sessionStorage.setItem(
+          `room:${code.toLowerCase()}`,
+          JSON.stringify({ name, role }),
+        );
+        navigate(`/room/${code.toLowerCase()}`, { state: { name, role } });
+      } else {
+        await api.post(`/rooms/${code.toLowerCase()}/join`, { name, role });
+
+        sessionStorage.setItem(
+          `room:${code.toLowerCase()}`,
+          JSON.stringify({ name, role }),
+        );
+        navigate(`/room/${code.toLowerCase()}`, { state: { name, role } });
       }
-      await api.post(`/rooms/${code.toLowerCase()}/join`, { name, role });
-      sessionStorage.setItem(
-        `room:${code.toLowerCase()}`,
-        JSON.stringify({ name, role }),
-      );
-      navigate(`/room/${code.toLowerCase()}`, { state: { name, role } });
     } catch (err: unknown) {
       if (
         err &&
@@ -89,6 +101,7 @@ export default function JoinRoom() {
               placeholder="e.g. abc123"
               value={code}
               onChange={(e) => setCode(e.target.value.toLowerCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
               className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm lowercase"
             />
           </div>
@@ -99,6 +112,7 @@ export default function JoinRoom() {
               placeholder="Jane Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
               className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
             />
           </div>
@@ -131,6 +145,7 @@ export default function JoinRoom() {
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
                   className="w-full bg-transparent border border-[#262626] rounded px-3 py-2.5 text-[#ededed] placeholder-[#404040] outline-none focus:border-[#737373] transition-colors text-sm"
                 />
               </div>

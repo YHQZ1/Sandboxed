@@ -137,22 +137,37 @@ export const startVerdictListener = () => {
         }
       }
 
+      let finalScore = 0;
+
       if (status === "accepted") {
+        const problemResult = await pool.query(
+          "SELECT points FROM problems WHERE id = $1",
+          [problemId],
+        );
+        finalScore = problemResult.rows[0]?.points ?? 100;
+
         await updateLeaderboard(
           roomCode,
           participantName,
-          score,
+          finalScore,
           submissionId,
           problemId,
         );
       }
+
+      await pool.query(
+        `UPDATE submissions 
+     SET status = $1, score = $2, time_taken = $3, memory_used = $4
+     WHERE id = $5`,
+        [status, finalScore, timeTaken, memoryUsed, submissionId],
+      );
 
       const io = getIO();
 
       io.to(`user:${participantName}:${roomCode}`).emit("verdict", {
         submissionId,
         status,
-        score,
+        score: status === "accepted" ? finalScore : 0,
         timeTaken,
         problemId,
       });
@@ -172,7 +187,7 @@ export const startVerdictListener = () => {
         participantName,
         problemTitle,
         status,
-        score,
+        score: status === "accepted" ? finalScore : 0,
       });
 
       const leaderboard = await getLeaderboard(roomCode);

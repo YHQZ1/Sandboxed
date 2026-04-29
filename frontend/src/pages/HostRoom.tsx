@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Socket } from "socket.io-client";
 import { useRoomStore } from "../store/roomStore";
@@ -104,22 +104,26 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "feed", label: "Live Feed" },
 ];
 
+const VALID_TABS: Tab[] = ["problems", "leaderboard", "people", "feed"];
+
 export default function HostRoom({ code, socket }: Props) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { room, problems, submissions } = useRoomStore();
   const { status: timerStatus } = useTimerStore();
 
-  const [activeTab, setActiveTab] = useState<Tab>(
-    (searchParams.get("tab") as Tab) || "problems",
-  );
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const param = searchParams.get("tab") as Tab;
+    return VALID_TABS.includes(param) ? param : "problems";
+  });
+
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(
     null,
   );
   const [showAddProblem, setShowAddProblem] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  const userId = localStorage.getItem("userId") || "";
+  const userId = useMemo(() => localStorage.getItem("userId") || "", []);
 
   const handleTimerStart = () =>
     socket.emit("timer_start", { roomCode: code, userId });
@@ -135,7 +139,10 @@ export default function HostRoom({ code, socket }: Props) {
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
-    setSearchParams({ tab });
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
   };
 
   const selectedProblem =

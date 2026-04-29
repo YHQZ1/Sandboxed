@@ -172,9 +172,6 @@ func (s *Server) processSubmission(req SubmitRequest) {
 
 	verdict := determineVerdict(results)
 	score := 0
-	if verdict == "accepted" {
-		score = 100
-	}
 
 	maxTime := 0
 	maxMem := 0

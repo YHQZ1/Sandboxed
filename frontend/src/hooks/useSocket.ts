@@ -51,6 +51,8 @@ export const useSocket = (
   const { setLeaderboard } = useLeaderboardStore();
 
   useEffect(() => {
+    if (!name || !roomCode) return;
+
     const socket = connectSocket();
     const { addFeedItem } = useLeaderboardStore.getState();
 
@@ -133,9 +135,9 @@ export const useSocket = (
         setLeaderboard(leaderboard || []),
     );
 
-    socket.on("problem_added", ({ problem }: { problem: Problem }) => {
-      addProblem(problem);
-    });
+    socket.on("problem_added", ({ problem }: { problem: Problem }) =>
+      addProblem(problem),
+    );
 
     socket.on("problem_updated", ({ problem }: { problem: Problem }) =>
       updateProblem(problem),
@@ -153,7 +155,9 @@ export const useSocket = (
     });
 
     socket.on("violation_warning", (data: { count: number; max: number }) => {
-      window.dispatchEvent(new CustomEvent("sandboxed:warning", { detail: data }));
+      window.dispatchEvent(
+        new CustomEvent("sandboxed:warning", { detail: data }),
+      );
     });
 
     socket.on("kicked", (data: { reason?: string } = {}) => {
@@ -195,9 +199,7 @@ export const useSocket = (
       socket.off("submission_update");
       socket.off("violation_warning");
       socket.off("kicked");
-      socket.off("banned")
-
-      sessionStorage.removeItem(`room:${roomCode}`);
+      socket.off("banned");
       disconnectSocket();
     };
   }, [

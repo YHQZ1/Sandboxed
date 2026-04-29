@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Socket } from "socket.io-client";
 import { useRoomStore } from "../store/roomStore";
@@ -159,6 +159,7 @@ export default function ParticipantRoom({ code, socket }: Props) {
     status: SubmissionStatus;
     score: number;
   } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [testCaseResults, setTestCaseResults] = useState<
     Array<{
       id: string;
@@ -174,7 +175,10 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
   const handleTabChange = (tab: SideTab) => {
     setActiveTab(tab);
-    setSearchParams({ tab });
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
   };
 
   useEffect(() => {
@@ -270,7 +274,8 @@ export default function ParticipantRoom({ code, socket }: Props) {
 
       // show toast
       setToast({ status: data.status, score: data.score });
-      setTimeout(() => setToast(null), 4000);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000);
 
       // fetch test case breakdown
       if (data.submissionId) {
@@ -433,6 +438,19 @@ export default function ParticipantRoom({ code, socket }: Props) {
     const interval = setInterval(detectDevTools, 3000);
     return () => clearInterval(interval);
   }, [timerStatus, testEnded, code, myName, socket]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (timerStatus === "ended" && !testEnded) {
+      setTestEnded(true);
+      if (document.fullscreenElement) document.exitFullscreen();
+    }
+  }, [timerStatus]);
 
   const enterFullscreen = useCallback(() => {
     document.documentElement.requestFullscreen().catch(() => {});
